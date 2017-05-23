@@ -1,0 +1,10 @@
+# git-ls-files --others --exclude-from=.gitignore
+# Lines that start with '#' are comments.
+*.py[oc]
+*~
+.settings
+*.bak
+dpm/VERSION
+.idea/
+*.tar
+*.gz
