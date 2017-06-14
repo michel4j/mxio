@@ -288,8 +288,8 @@ class CBFImageFile(object):
                 config = '%s.ini' % hdr_type.value.lower()
                 info = utils.parse_data(hdr_contents.value, config)
                 header['detector_type'] = info['detector'].lower().strip().replace(' ', '')
-                header['two_theta'] = 0 if not info['two_theta'] else info['two_theta']
-                header['pixel_size'] = info['pixel_size'][0] * 1000
+                header['two_theta'] = 0 if not info['two_theta'] else round(info['two_theta'],2)
+                header['pixel_size'] = round(info['pixel_size'][0] * 1000, 5)
                 header['exposure_time'] = info['exposure_time']
                 header['wavelength'] = info['wavelength']
                 header['distance'] = info['distance'] * 1000
@@ -325,7 +325,7 @@ class CBFImageFile(object):
         self.image = Image.frombytes('F', self.header['detector_size'], data, 'raw', el_params[1])
         self.image = self.image.convert('I')
         self.data = numpy.fromstring(data, dtype=el_type).reshape(*self.header['detector_size'][::-1])
-        self.header['average_intensity'] = self.data.mean()
+        self.header['average_intensity'] = max(0.0, self.data.mean())
         self.header['min_intensity'], self.header['max_intensity'] = self.data.min(), self.data.max()
         self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
         self.header['overloads'] = len(numpy.where(self.data >= self.header['saturated_value'])[0])

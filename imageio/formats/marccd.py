@@ -83,7 +83,7 @@ class MarCCDImageFile(object):
 
         # recalculate average intensity if not present within file
         if self.header['average_intensity'] < 0.01:
-            self.header['average_intensity'] = numpy.mean(self.data)
+            self.header['average_intensity'] = max(0.0, numpy.mean(self.data))
         self.header['gamma'] = calc_gamma(self.header['average_intensity'])
         self.image = raw_img.convert('I')
 

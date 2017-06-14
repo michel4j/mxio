@@ -109,7 +109,7 @@ class SMVImageFile(object):
         self.image = Image.frombytes('F', self.header['detector_size'], data, 'raw', self._raw_decoder)
         self.data = numpy.fromstring(data, dtype=self._el_type).reshape(*self.header['detector_size'])
         self.image = self.image.convert('I')
-        self.header['average_intensity'] = self.data.mean()
+        self.header['average_intensity'] = max(0.0, self.data.mean())
         self.header['min_intensity'], self.header['max_intensity'] = self.data.min(), self.data.max()
         self.header['gamma'] = calc_gamma(self.header['average_intensity'])
         self.header['overloads'] = len(numpy.where(self.data >= self.header['saturated_value'])[0])

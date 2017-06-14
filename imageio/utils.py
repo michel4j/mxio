@@ -52,7 +52,7 @@ def stretch(gamma):
 
 
 def calc_gamma(avg_int):
-    return 29.378 * avg_int ** -0.86
+    return 2.7 if avg_int == 0.0 else 29.378 * avg_int ** -0.86
 
 
 def _scanf_compile(format):
