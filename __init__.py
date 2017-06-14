@@ -1,6 +1,8 @@
+from .formats import marccd, cbf, pck, smv
+
 import magic
 from common import *
-from imageio.formats import marccd, cbf, pck, raxis, smv
+from formats import raxis
 
 _image_type_map = {
     'marCCD Area Detector Image' : marccd.MarCCDImageFile,

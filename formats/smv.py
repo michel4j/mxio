@@ -3,13 +3,12 @@ Created on Nov 25, 2010
 
 @author: michel
 '''
-import numpy
-import re
 import ctypes
-from PIL import Image
-from imageio.utils import calc_gamma
-from imageio.common import *
+import re
 
+import numpy
+from PIL import Image
+from ..utils import calc_gamma
 
 DECODER_DICT = {
     "unsigned_short": (ctypes.c_uint16, 'F;16','F;16B'),

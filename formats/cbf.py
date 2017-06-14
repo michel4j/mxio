@@ -10,10 +10,9 @@ from ctypes import *
 
 import numpy
 from PIL import Image
-
-from imageio import utils
-from imageio.common import *
-from imageio.log import get_module_logger
+from .. import utils
+from ..common import *
+from ..log import get_module_logger
 
 # Configure Logging
 _logger = get_module_logger('imageio')

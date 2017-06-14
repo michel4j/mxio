@@ -7,7 +7,7 @@ Scanf: Small scanf-implementation.
 
 import re
 from scipy import interpolate
-from configobj import ConfigObj
+from .configobj import ConfigObj
 import numpy
 import os
 

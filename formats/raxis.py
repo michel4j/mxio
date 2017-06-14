@@ -8,11 +8,10 @@ import struct
 
 import numpy
 from PIL import Image
+from ..utils import calc_gamma
 
-from imageio.utils import calc_gamma
 
-
-class MarCCDImageFile(object):
+class RAXISImageFile(object):
     def __init__(self, filename, header_only=False):
         self.filename = filename
         self._read_header()
@@ -79,13 +78,12 @@ class MarCCDImageFile(object):
     def _read_image(self):
         raw_img = Image.open(self.filename)
         self.raw_data = raw_img.load()
-        self.data = numpy.fromstring(raw_img.tobytes(), 'H').reshape(*self.header['detector_size'])
 
         # recalculate average intensity if not present within file
         if self.header['average_intensity'] < 0.01:
-            self.header['average_intensity'] = max(0.0, numpy.mean(self.data))
+            self.header['average_intensity'] = numpy.mean(numpy.fromstring(raw_img.tostring(), 'H'))
         self.header['gamma'] = calc_gamma(self.header['average_intensity'])
         self.image = raw_img.convert('I')
 
 
-__all__ = ['MarCCDImageFile']
+__all__ = ['RAXISImageFile']

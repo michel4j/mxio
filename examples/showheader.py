@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 
-import imageio
-import sys
-from matplotlib import pyplot as plt
-import numpy
-from scipy import optimize, signal
-import operator
 import functools
+import operator
+import sys
+
+from .. import read_image
+import numpy
+from matplotlib import pyplot as plt
+from scipy import optimize, signal
 
 XSTEP = 0.05
 
@@ -154,7 +155,7 @@ def radial(frame):
     return plots
 
 if __name__ == '__main__':
-    frame = imageio.read_image(sys.argv[1])
+    frame = read_image(sys.argv[1])
     plots = radial(frame)
     for orx, ory in plots:
         print '---------------'
