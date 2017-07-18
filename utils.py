@@ -42,7 +42,7 @@ scanf_translate = [
 
 def stretch(gamma):
     lut = (gamma * numpy.arange(65536)).astype(numpy.uint)
-    lut[lut>254] = 254
+    lut[lut > 254] = 254
     return lut
 
 def calc_gamma(avg_int):
