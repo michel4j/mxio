@@ -40,14 +40,8 @@ scanf_translate = [
 
 
 def stretch(gamma):
-    lut = numpy.zeros(65536, dtype=numpy.uint)
-    lut[65280:] = 255
-    for i in xrange(65280):
-        v = int(i * gamma)
-        if v >= 255:
-            lut[i] = 254
-        else:
-            lut[i] = v
+    lut = (gamma * numpy.arange(65536)).astype(numpy.uint)
+    lut[lut > 254] = 254
     return lut
 
 
