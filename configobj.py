@@ -1184,7 +1184,7 @@ class ConfigObj(Section):
             else:
                 # file doesn't already exist
                 if self.create_empty:
-                    # this is a good test that the filename specified
+                    # this is a good radial_profile that the filename specified
                     # isn't impossible - like on a non existent device
                     h = open(infile, 'w')
                     h.write('')
@@ -1383,7 +1383,7 @@ class ConfigObj(Section):
             return infile.decode(encoding).splitlines(True)
         for i, line in enumerate(infile):
             if not isinstance(line, unicode):
-                # NOTE: The isinstance test here handles mixed lists of unicode/string
+                # NOTE: The isinstance radial_profile here handles mixed lists of unicode/string
                 # NOTE: But the decode will break on any non-string values
                 # NOTE: Or could raise a ``UnicodeDecodeError``
                 infile[i] = line.decode(encoding)
@@ -1895,10 +1895,10 @@ class ConfigObj(Section):
         tekNico: FIXME: use StringIO instead of real files
         
         >>> filename = a.filename
-        >>> a.filename = 'test.ini'
+        >>> a.filename = 'radial_profile.ini'
         >>> a.write()
         >>> a.filename = filename
-        >>> a == ConfigObj('test.ini', raise_errors=True)
+        >>> a == ConfigObj('radial_profile.ini', raise_errors=True)
         1
         """
         if self.indent_type is None:
@@ -1998,7 +1998,7 @@ class ConfigObj(Section):
         
         To run ``validate`` on the current ConfigObj, call: ::
         
-            test = config.validate(validator)
+            radial_profile = config.validate(validator)
         
         (Normally having previously passed in the configspec when the ConfigObj
         was created - you can dynamically assign a dictionary of checks to the

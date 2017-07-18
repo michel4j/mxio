@@ -11,6 +11,8 @@ from .configobj import ConfigObj
 import numpy
 import os
 
+
+
 INI_DIR = os.path.join(os.path.dirname(__file__), 'formats', 'data')
 
 DEBUG = False
@@ -38,18 +40,10 @@ scanf_translate = [
         ("%\{\{(.+)\}\}", "%s", lambda x: x),
     ]]
 
-
 def stretch(gamma):
-    lut = numpy.zeros(65536, dtype=numpy.uint)
-    lut[65280:] = 255
-    for i in xrange(65280):
-        v = int(i * gamma)
-        if v >= 255:
-            lut[i] = 254
-        else:
-            lut[i] = v
+    lut = (gamma * numpy.arange(65536)).astype(numpy.uint)
+    lut[lut>254] = 254
     return lut
-
 
 def calc_gamma(avg_int):
     return 2.7 if avg_int == 0.0 else 29.378 * avg_int ** -0.86
@@ -295,3 +289,4 @@ def parse_data(data, config, fallback=None):
     conf = ConfigObj(os.path.join(INI_DIR, config))
     info = _process_sections(data, conf)
     return info
+

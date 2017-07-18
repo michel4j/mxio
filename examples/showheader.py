@@ -3,163 +3,168 @@
 import functools
 import operator
 import sys
-
-from .. import read_image
+from imageio import read_image
 import numpy
 from matplotlib import pyplot as plt
 from scipy import optimize, signal
+import time
+import os
 
 XSTEP = 0.05
-
+BACKSTOP_OFFSET = 100
+MASK_REGIONS = {
+    'pilatus36m': [(2400, 423, 2462, 523)],
+}
 
 def baseline(values):
     cdev = values.std()
     orig = len(values)
     pdev = cdev + 100
     mx = values.max()
-    delta = 100.
-    while (abs(pdev - cdev) > 0.1) and (mx > values.min() + cdev*2):
+    delta = 3
+    while (abs(pdev - cdev) > 0.1) and (mx > values.min() + cdev * 2):
         pdev = cdev
-        values = values[values<mx]
+        values = values[values < mx]
         mx = values.max()
         cdev = values.std()
-    return cdev
+    return values
 
-
-def slices(x, n, m):
-    slice = 2*numpy.pi/m
-    ranges = [
-        (start_angle, start_angle + slice)
-        for start_angle in numpy.linspace(-numpy.pi, numpy.pi, m+2)[1:]
-    ]
-    return [
-        (x > start_angle) & (x < end_angle)
-        for start_angle, end_angle in ranges
-    ]
-
-def select_slices(x, n, m):
-    slice = 2*numpy.pi/m
-    ranges = [
-        (start_angle, start_angle + slice)
-        for start_angle in numpy.linspace(-numpy.pi, numpy.pi, m + 2)[1:]
-    ]
-    return functools.reduce(operator.__or__, [
-        (x > start_angle) & (x < end_angle)
-        for start_angle, end_angle in ranges
-    ])
-
-
-def reject_outliers(data, m=2.):
-    d = numpy.abs(data - numpy.median(data))
-    mdev = numpy.median(d)
-    s = d / mdev if mdev else 0.
-    return data[s < m]
-
-
-def calc_r(nx, ny, cx, cy, rotx=0, roty=0):
-    x = (numpy.arange(nx) - int(cx)) / numpy.cos(rotx)
-    y = (numpy.arange(ny) - int(cy)) / numpy.cos(roty)
-    return numpy.hypot(x[:, None], y[None, :])
-
-
-def calc_theta(nx, ny, cx, cy, rotx=0, roty=0):
-    x = (numpy.arange(nx) - int(cx)) / numpy.cos(rotx)
-    y = (numpy.arange(ny) - int(cy)) / numpy.cos(roty)
-    return numpy.arctan2(2 * x[:, None] / nx, 2 * y[None, :] / ny)
+def angle_slice(x, angle, width=1):
+    slice = numpy.radians(angle)
+    w = numpy.radians(width) / 2
+    return (x > slice - w) & (x < slice + w)
 
 
 def calc_profile(r, data):
     intensities = numpy.bincount(r, data)
-    counts = numpy.bincount(r)
-    return intensities / counts
-
-class StdOptimizer(object):
-    def __init__(self, data, nx, ny, mask, prec=1):
-        self.mask = mask
-        self.data = data
-        self.nx, self.ny = nx, ny
-        self.factors = 1.0 / (prec * XSTEP)
-
-    def __call__(self, coeffs):
-        pars = self.factors * coeffs
-
-        rg = calc_r(self.nx, self.ny, *pars).astype(numpy.int)
-        work_r = rg[self.mask].ravel()
-        profile = calc_profile(work_r, self.data)
-        val = len(signal.find_peaks_cwt(profile, numpy.arange(1, 5)))
-        print '{:10.3f} | {:10.0f}{:10.0f}'.format(val, *pars)
-        return val
-
-    def start_coeffs(self, coeffs):
-        return numpy.array(coeffs) / self.factors
-
-    def final_coeffs(self, result):
-        return self.factors * result.x
+    counts = numpy.bincount(r) + 1
+    return (intensities / counts)
 
 
-def radial(frame):
+def norm_curve(s):
+    return (s - s.min()) / (s.max() - s.min())
+
+
+def calc_shift(original, match):
+    s1 = norm_curve(original)
+    s2 = norm_curve(match)
+    z = signal.fftconvolve(s1, s2[::-1])
+    lags = numpy.arange(z.size) - (s2.size - 1)
+    return (lags[numpy.argmax(numpy.abs(z))])
+
+
+class FrameProfiler(object):
+    def __init__(self, frame, masks=[]):
+        self.frame = frame
+        self.nx, self.ny = frame.data.shape
+        self.x_axis = numpy.arange(self.nx)
+        self.y_axis = numpy.arange(self.ny)
+        self.width = 10
+        self.cx, self.cy = frame.header['beam_center']
+        self.rotx = 1
+        self.roty = 1
+        self.masks = masks
+        self.data_mask = (frame.data > 0.0) & (frame.data < frame.header['saturated_value'])
+        self.pix_scale = frame.header['pixel_size'] / frame.header['distance']
+        self.apply_masks()
+        self.wedges = self.azimuth()
+        print('Header beam center: {:0.0f}, {:0.0f}'.format(self.cx, self.cy))
+
+    def apply_masks(self, gapfill=-2):
+        for mask in self.masks:
+            i0, j0, i1, j1 = mask
+            self.frame.data[j0:j1, i0:i1] = gapfill
+
+    def profile(self, sub_mask=None):
+        mask = (self.frame.data > 0.0) & (self.frame.data < self.frame.header['saturated_value'])
+        if sub_mask:
+            mask &= sub_mask
+        r = self.radii()[mask].ravel()
+        data = self.frame.data[mask].ravel()
+        prof = calc_profile(r, data)
+        r_axis = numpy.arange(r.max() + 1)
+        return numpy.array([r_axis, prof]).transpose()
+
+    def azimuth(self):
+        x = (self.x_axis - self.cx) / (0.5 * self.rotx * self.nx)
+        y = (self.y_axis - self.cy) / (0.5 * self.roty * self.ny)
+        return numpy.arctan2(x[:, None], y[None, :])
+
+    def radii(self):
+        x = (self.x_axis - self.cy) / self.rotx
+        y = (self.y_axis - self.cx) / self.roty
+        return numpy.hypot(x[:, None], y[None, :]).astype(numpy.int)
+
+    def recenter(self, angle):
+        a1 = angle % 360
+        a2 = (angle + 180) % 360 - 360
+        theta = self.wedges
+        rg = self.radii()
+        m1 = angle_slice(theta, a1, self.width) & self.data_mask
+        m2 = angle_slice(theta, a2, self.width) & self.data_mask
+        p1 = calc_profile(rg[m1], frame.data[m1].ravel())
+        p2 = calc_profile(rg[m2], frame.data[m2].ravel())
+        offset = calc_shift(p1[BACKSTOP_OFFSET:], p2[BACKSTOP_OFFSET:])
+        dx = 0.5 * offset * numpy.cos(numpy.radians(a1))
+        dy = 0.5 * offset * numpy.sin(numpy.radians(a1))
+        self.cx, self.cy = map(int, (self.cx + dx, self.cy + dy))
+        print('Optimized beam center: {}, {}'.format(self.cx, self.cy))
+
+    def retilt(self, angle):
+        a1 = 45
+        a2 = 135
+        theta = self.wedges
+        rg = self.radii()
+        m1 = angle_slice(theta, a1, self.width) & self.data_mask
+        m2 = angle_slice(theta, a2, self.width) & self.data_mask
+        p1 = calc_profile(rg[m1], frame.data[m1].ravel())
+        p2 = calc_profile(rg[m2], frame.data[m2].ravel())
+        offset = calc_shift(p1[BACKSTOP_OFFSET:], p2[BACKSTOP_OFFSET:])
+        dx = 0.5 * offset * numpy.cos(numpy.radians(a1))
+        dy = 0.5 * offset * numpy.sin(numpy.radians(a1))
+        self.cx, self.cy = map(int, (self.cx + dx, self.cy + dy))
+        print('Optimized beam center: {}, {}'.format(self.cx, self.cy))
+
+
+def save_xdi(filename, profile):
+    """Save  XDI 1.0 format"""
+    fmt_prefix = '%10.3g'
+    with open(filename, 'w') as f:
+        f.write('# XDI/1.0 MXDC\n')
+        f.write('# Mono.name: Si 111\n')
+
+        for i, (info, units) in enumerate([('TwoTheta', 'degrees'), ('Intensity', 'counts')]):
+            f.write('# Column.%d: %s %s\n' % (i + 1, info, units))
+
+        f.write('#///\n')
+        f.write('# %d data points\n' % len(profile))
+        f.write('#---\n')
+        numpy.savetxt(f, profile, fmt=fmt_prefix)
+
+def radial_profile(frame):
     # initialize
-    cx, cy = frame.header['beam_center']
-    nx, ny = frame.data.shape
-    rotx, roty = 0.0, 0.0
+    calc = FrameProfiler(frame, masks=MASK_REGIONS.get(frame.header['detector_type'], []))
+    for angle in [45, 135, 45]:
+        calc.recenter(angle)
 
-    theta = calc_theta(nx, ny, cx, cy)
-    theta_mask = select_slices(theta, 9, 8)
-    mask = (frame.data > 0.0) & (frame.data < frame.header['saturated_value'])
-    mask &= theta_mask
+    prof = calc.profile()
+    prof[:, 0] = numpy.degrees(numpy.arctan(prof[:, 0] * calc.pix_scale))
+    return prof
 
-    # Calculate starting profile
-    rg = calc_r(nx, ny, cx, cy).astype(numpy.int)
-    org_r = rg[mask].ravel()
-    r_max = org_r.max() + 1
-    r_start = numpy.arange(r_max)
-    work_data = frame.data[mask].ravel()
-    org_profile = calc_profile(org_r, work_data)
-
-    # Optimize parameters
-    optimizer = StdOptimizer(work_data, nx, ny, mask, prec=numpy.array([1, 1]))
-    coeffs = optimizer.start_coeffs([cx, cy])
-    results = optimize.minimize(
-        optimizer, coeffs[:],
-        method='Nelder-Mead',
-        #method='Powell',
-        # #method='L-BFGS-B',
-        #method='SLSQP',
-        # bounds=bounds,
-        options={
-            'fatol': 0.5,
-            'xtol': .02,
-            # 'ftol': 0.005,
-            # 'maxfev': 200,
-            # 'eps': 1e-5
-        }
-    )
-
-    pars = optimizer.final_coeffs(results)
-    print 'Final:    {:8.0f}{:8.0f}'.format(*pars)
-    plots = [(r_start, org_profile)]
-    r_opt = calc_r(nx, ny, *pars).astype(numpy.int)
-    work_r = r_opt[mask].ravel()
-    r = numpy.arange(work_r.max() + 1)
-    plots.append((r, calc_profile(work_r, work_data)))
-
-    # for slice in slices(theta, 18, 4):
-    #     this_mask = mask & slice
-    #     if not this_mask.sum(): continue
-    #     work_data = frame.data[this_mask].ravel()
-    #     work_r = r_opt[this_mask].ravel()
-    #     r = numpy.arange(work_r.max() + 1)
-    #     plots.append((r, calc_profile(work_r, work_data)))
-
-
-    return plots
 
 if __name__ == '__main__':
-    frame = read_image(sys.argv[1])
-    plots = radial(frame)
-    for orx, ory in plots:
-        print '---------------'
-        plt.plot(orx, ory)
-        baseline(ory)
+    import cProfile, pstats
 
-    plt.show()
+    frame = read_image(sys.argv[1])
+    # cProfile.run('prof = radial_profile(frame)', "{}.profile".format(__file__))
+    # s = pstats.Stats("{}.profile".format(__file__))
+    # s.strip_dirs()
+    # s.sort_stats("time").print_stats(10)
+
+    prof = radial_profile(frame)
+    name = '{}.xdi'.format(os.path.splitext(os.path.basename(sys.argv[1]))[0])
+    save_xdi(name, prof)
+
+    #plt.plot(prof[:, 0], prof[:, 1])
+    #plt.show()
+

@@ -237,6 +237,7 @@ class CBFImageFile(object):
         ix, iy = c_double(sz1.value / 2.0), c_double(sz2.value / 2.0)
         res |= cbflib.cbf_get_beam_center(self.detector, byref(ix), byref(iy), byref(dx), byref(dy))
         header['beam_center'] = (ix.value, iy.value)
+        print header['beam_center']
 
         it = c_double(0.0)
         res |= cbflib.cbf_get_integration_time(self.handle, 0, it)
