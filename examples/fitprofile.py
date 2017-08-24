@@ -243,5 +243,5 @@ if __name__ == '__main__':
     name = '{}.xdi'.format(os.path.splitext(os.path.basename(sys.argv[1]))[0])
     save_xdi(name, prof)
 
-    #plt.plot(prof[:, 0], prof[:, 1], 'c-')
-    #plt.show()
+    plt.plot(prof[:, 0], prof[:, 1], 'c-')
+    plt.show()
