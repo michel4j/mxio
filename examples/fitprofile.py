@@ -70,6 +70,48 @@ def calc_shift(original, match):
     return (lags[numpy.argmax(numpy.abs(z))])
 
 
+def inliers(points, thresh=3.5):
+    if len(points.shape) == 1:
+        points = points[:,None]
+    median = numpy.median(points, axis=0)
+    diff = numpy.sum((points - median)**2, axis=-1)
+    diff = numpy.sqrt(diff)
+    med_abs_deviation = numpy.median(diff)
+    modified_z_score = 0.6745 * diff / med_abs_deviation
+    return modified_z_score <= thresh
+
+
+class PeakSorter(object):
+    def __init__(self):
+        self.tree = None
+        self.distances = None
+
+    def add_peaks(self, peaks):
+        if not self.tree:
+            self.tree = [
+                [pk] for pk in peaks
+            ]
+            self.distances = [
+                [0] for pk in peaks
+            ]
+        else:
+            found = []
+            for peak in peaks:
+                idx, min_d = self.closest(peak)
+                if idx >= 0 and idx not in found:
+                    found.append(idx)
+                    self.tree[idx].append(peak)
+                    self.distances[idx].append(min_d)
+
+    def closest(self, pk):
+        ds = [
+            numpy.hypot(*(pk - pks[-1]))
+            for pks in self.tree
+        ]
+        min_d = min(ds)
+        return ds.index(min_d), min_d
+
+
 class FrameProfiler(object):
     def __init__(self, filename):
         self.frame = read_image(filename)
@@ -86,7 +128,7 @@ class FrameProfiler(object):
 
         self.data_mask = (self.frame.data > 0.0) & (self.frame.data < self.frame.header['saturated_value'])
         self.pix_scale = self.frame.header['pixel_size'] / self.frame.header['distance']
-        self.apply_masks()
+        #self.apply_masks()
         self.wedges = self.azimuth()
         self.scales = numpy.ones_like(self.wedges)
         print('Header beam center: {:0.0f}, {:0.0f}'.format(self.cx, self.cy))
@@ -102,18 +144,17 @@ class FrameProfiler(object):
             mask &= sub_mask
         r = self.radii()[mask].ravel()
         data = self.frame.data[mask].ravel()
-        prof = calc_profile(r, data)
-        prof[:BACKSTOP_OFFSET] = prof[BACKSTOP_OFFSET]
-
+        prof = calc_profile(r.astype(int), data)
         r_axis = numpy.arange(r.max() + 1)
-        return numpy.array([r_axis, prof]).transpose()
+        fprof = numpy.array([r_axis, prof]).transpose()
+        return fprof[BACKSTOP_OFFSET:,:]
 
     def from_polar(self, r, theta):
         return self.cx + r * numpy.cos(theta), self.cy + r * numpy.sin(theta)
 
     def azimuth(self):
-        x = (self.x_axis - self.cx) / (0.5 * self.nx)
-        y = (self.y_axis - self.cy) / (0.5 * self.ny)
+        x = (self.x_axis - self.cx)/(0.5*self.nx)
+        y = (self.y_axis - self.cy)/(0.5*self.nx)
         xm = self.xskew ** numpy.sign(x)
         ym = self.yskew ** numpy.sign(y)
         x = (x * xm)
@@ -123,10 +164,10 @@ class FrameProfiler(object):
     def radii(self):
         x = (self.x_axis - self.cy)
         y = (self.y_axis - self.cx)
-        xm = self.xskew ** numpy.sign(x)
-        ym = self.yskew ** numpy.sign(y)
-        x = (x * xm)
-        y = (y * ym)
+        #xm = self.xskew ** numpy.sign(x)
+        #ym = self.yskew ** numpy.sign(y)
+        #x = (x * xm)
+        #y = (y * ym)
         return (numpy.hypot(x[:, None], y[None, :])).astype(numpy.int)
 
     def recenter(self, angle):
@@ -208,7 +249,33 @@ def prof_err(coeffs, p1, p2):
 def radial_profile(filename):
     # initialize
     calc = FrameProfiler(filename)
-    calc.retilt()
+    peak_sorter = PeakSorter()
+
+    for angle in numpy.linspace(-45, 315, 30):
+        profile = calc.profile(angle_slice(calc.wedges, angle, 2))
+        ys = signal.savgol_filter(profile[:,1], 11, 1)
+        pks = signal.find_peaks_cwt(ys, numpy.arange(30, 100))
+        x, y =calc.from_polar(profile[pks, 0], numpy.radians(angle))
+        peaks = numpy.dstack((x, y))[0]
+        peak_sorter.add_peaks(peaks)
+        print '.'
+        #plt.plot(x, y, 'o')
+        #plt.plot(profile[:,0], ys)
+        #for xi in xps:
+        #    plt.axvline(xi)
+        #print zip(x,y)
+
+    for i, circle in enumerate(peak_sorter.tree):
+        vals = numpy.array(circle)
+        plt.plot(vals[:,0], vals[:, 1], 'o')
+        print i, peak_sorter.distances[i]
+
+
+    plt.imshow(numpy.log(calc.frame.data))
+    plt.show()
+
+    #calc.retilt()
+
     # for angle in [45, 135, 45, 135]:
     #    calc.recenter(angle)
 
@@ -243,5 +310,5 @@ if __name__ == '__main__':
     name = '{}.xdi'.format(os.path.splitext(os.path.basename(sys.argv[1]))[0])
     save_xdi(name, prof)
 
-    plt.plot(prof[:, 0], prof[:, 1], 'c-')
-    plt.show()
+    #plt.plot(prof[:, 0], prof[:, 1], 'c-')
+    #plt.show()

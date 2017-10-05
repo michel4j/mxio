@@ -78,7 +78,7 @@ class MarCCDImageFile(object):
     def _read_image(self):
         raw_img = Image.open(self.filename)
         self.raw_data = raw_img.load()
-        self.data = numpy.fromstring(raw_img.tobytes(), 'H').reshape(*self.header['detector_size'])
+        self.data = numpy.fromstring(raw_img.tobytes(), 'H').reshape(*self.header['detector_size']).transpose()
 
         # recalculate average intensity if not present within file
         if self.header['average_intensity'] < 0.01:

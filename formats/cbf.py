@@ -324,6 +324,7 @@ class CBFImageFile(object):
         self.image = Image.frombytes('F', self.header['detector_size'], data, 'raw', el_params[1])
         self.image = self.image.convert('I')
         self.data = numpy.fromstring(data, dtype=el_type).reshape(*self.header['detector_size'][::-1]).transpose()
+
         self.header['average_intensity'] = max(0.0, self.data.mean())
         self.header['min_intensity'], self.header['max_intensity'] = self.data.min(), self.data.max()
         self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
@@ -333,6 +334,5 @@ class CBFImageFile(object):
         res = self._cbflib.cbf_free_handle(self.handle)
         res |= self._cbflib.cbf_free_goniometer(self.goniometer)
         res |= self._cbflib.cbf_free_detector(self.detector)
-
 
 __all__ = ['CBFImageFile']
