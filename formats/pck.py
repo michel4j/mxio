@@ -10,7 +10,7 @@ from ctypes import *
 
 import numpy
 from PIL import Image
-from dpm.utils.log import get_module_logger
+from imageio.log import get_module_logger
 from imageio.common import *
 from imageio.utils import calc_gamma
 
