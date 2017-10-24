@@ -10,9 +10,9 @@ from ctypes import *
 
 import numpy
 from PIL import Image
-from imageio.log import get_module_logger
-from imageio.common import *
-from imageio.utils import calc_gamma
+from ..log import get_module_logger
+from ..common import *
+from ..utils import calc_gamma
 
 _logger = get_module_logger('imageio')
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')

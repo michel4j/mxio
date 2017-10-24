@@ -8,7 +8,7 @@ import struct
 
 import numpy
 from PIL import Image
-from imageio.utils import calc_gamma
+from ..utils import calc_gamma
 
 
 class MarCCDImageFile(object):
