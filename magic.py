@@ -23,7 +23,7 @@ import ctypes.util
 import os.path
 from ctypes import c_char_p, c_int, c_size_t, c_void_p
 
-MAGIC_FILE = os.path.join(os.path.dirname(__file__), 'formats', 'data', 'magic')
+MAGIC_FILE = os.path.join(os.path.dirname(__file__), 'data', 'magic')
 
 
 class MagicException(Exception):

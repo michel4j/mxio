@@ -11,6 +11,7 @@ from ctypes import *
 import numpy
 from PIL import Image
 from .. import utils
+from .. import parser
 from ..common import *
 from ..log import get_module_logger
 
@@ -284,8 +285,7 @@ class CBFImageFile(object):
             res |= cbflib.cbf_get_value(self.handle, byref(hdr_contents))
             if res == 0 and hdr_type.value != 'XDS special':
                 _logger.debug('miniCBF header type found: %s' % hdr_type.value)
-                config = '%s.ini' % hdr_type.value.lower()
-                info = utils.parse_data(hdr_contents.value, config)
+                info = parser.parse_text(hdr_contents.value, hdr_type.value)
                 header['detector_type'] = info['detector'].lower().strip().replace(' ', '')
                 header['two_theta'] = 0 if not info['two_theta'] else round(info['two_theta'],2)
                 header['pixel_size'] = round(info['pixel_size'][0] * 1000, 5)
