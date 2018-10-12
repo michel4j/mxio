@@ -1,5 +1,5 @@
 from __future__ import print_function
-from .formats import marccd, cbf, pck, smv, raxis
+from .formats import marccd, smv, raxis
 from . import magic
 from .common import *
 
@@ -10,11 +10,13 @@ _image_type_map = {
 }
 
 try:
+    from .formats import cbf
     _image_type_map['CBF Area Detector Image'] = cbf.CBFImageFile
 except FormatNotAvailable:
     pass
 
 try:
+    from .formats import pck
     _image_type_map['PCK Area Detector Image'] = pck.PCKImageFile
 except FormatNotAvailable:
     pass
