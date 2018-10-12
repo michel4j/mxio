@@ -15,7 +15,7 @@ from ..common import *
 from ..utils import calc_gamma
 
 _logger = get_module_logger('imageio')
-DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 
 try:
     pcklib = cdll.LoadLibrary(os.path.join(DATA_DIR, 'libpck.so'))

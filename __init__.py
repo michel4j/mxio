@@ -1,8 +1,7 @@
-from .formats import marccd, cbf, pck, smv
-
-import magic
-from common import *
-from formats import raxis
+from __future__ import print_function
+from .formats import marccd, smv, raxis
+from . import magic
+from .common import *
 
 _image_type_map = {
     'marCCD Area Detector Image' : marccd.MarCCDImageFile,
@@ -11,11 +10,13 @@ _image_type_map = {
 }
 
 try:
+    from .formats import cbf
     _image_type_map['CBF Area Detector Image'] = cbf.CBFImageFile
 except FormatNotAvailable:
     pass
 
 try:
+    from .formats import pck
     _image_type_map['PCK Area Detector Image'] = pck.PCKImageFile
 except FormatNotAvailable:
     pass
@@ -40,7 +41,7 @@ def read_image(filename, header_only=False):
         return img_obj
     else:
         known_formats = ', '.join([v.split()[0] for v in _image_type_map.keys()])
-        print 'Unknown File format `%s`' % key
+        print('Unknown File format `%s`' % key)
         raise UnknownImageFormat('Supported formats [%s]' % (known_formats,))
         
 
