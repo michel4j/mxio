@@ -71,7 +71,7 @@ class Magic:
     def __del__(self):
         try:
             magic_close(self.cookie)
-        except Exception, e:
+        except Exception as e:
             # print "got thig: ", e
             pass
 
