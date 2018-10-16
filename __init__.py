@@ -15,13 +15,6 @@ try:
 except FormatNotAvailable:
     pass
 
-try:
-    from .formats import pck
-    _image_type_map['PCK Area Detector Image'] = pck.PCKImageFile
-except FormatNotAvailable:
-    pass
-
-
 def read_image(filename, header_only=False):
     """Determine the file type using libmagic, open the image using the correct image IO 
     back-end, and return an image object
