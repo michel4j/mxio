@@ -320,7 +320,6 @@ class CBFImageFile(object):
                                                1, c_size_t(num_el), byref(num_el_read))
             if res != 0:
                 _logger.error('MiniCBF Image data error: %s' % (_format_error(res),))
-        el_type = DECODER_DICT[self.mime_header.get('X-Binary-Element-Type', 'signed 32-bit integer')][1]
 
         self.image = Image.frombytes('F', self.header['detector_size'], data, 'raw', el_params[1])
         self.image = self.image.convert('I')
