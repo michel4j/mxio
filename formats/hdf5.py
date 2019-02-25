@@ -76,14 +76,14 @@ class HDF5DataFile(object):
         keys = sorted(self.raw['/entry/data'].keys())
         section = self.raw['/entry/data/{}'.format(keys[0])]
         'Section has {} frames'.format(section.shape[0])
-        data = section.value.sum(axis=1)
+        data = section[50]
         self.header['average_intensity'] = max(0.0, data.mean())
-        self.header['min_intensity'] = data.min()
+        self.header['min_intensity'] = 0 #data.min()
         self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
-        self.header['overloads'] = len(numpy.where(data >= self.header['saturated_value'])[0])
+        self.header['overloads'] = 0 #en(numpy.where(data >= self.header['saturated_value'])[0])
         self.data = data
         self.image = Image.fromarray(data, 'F')
-        self.image = self.image.convert('I')
+        #self.image = self.image.convert('I')
 
 
 
