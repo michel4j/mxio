@@ -57,6 +57,7 @@ class HDF5DataFile(object):
         self.header['distance'] *= 1000
         self.header['sensor_thickness'] *= 1000
         self.header['pixel_size'] = tuple(1000*x for x in self.header['pixel_size'])
+        self.header['filename'] = self.filename
 
         # try to find oscillation axis and parameters as first non-zero average
         for axis in ['chi', 'kappa', 'omega', 'phi']:
