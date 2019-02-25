@@ -78,12 +78,13 @@ class HDF5DataFile(object):
         'Section has {} frames'.format(section.shape[0])
         data = section[50]
         self.header['average_intensity'] = max(0.0, data.mean())
-        self.header['min_intensity'] = 0 #data.min()
-        self.header['gamma'] = 1.0 # utils.calc_gamma(self.header['average_intensity'])
+        self.header['min_intensity'] = data.min()
+        self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
         self.header['overloads'] = 0 #en(numpy.where(data >= self.header['saturated_value'])[0])
         self.data = data
-        self.image = Image.fromarray(data, 'F')
+        self.image = Image.fromarray(numpy.uint32(data))
         self.image = self.image.convert('I')
+
 
 
 
