@@ -7,6 +7,7 @@ _image_type_map = {
     'marCCD Area Detector Image' : marccd.MarCCDImageFile,
     'SMV Area Detector Image' : smv.SMVImageFile,
     'R-Axis Area Detector Image': raxis.RAXISImageFile,
+
 }
 
 try:
@@ -14,6 +15,14 @@ try:
     _image_type_map['CBF Area Detector Image'] = cbf.CBFImageFile
 except FormatNotAvailable:
     pass
+
+
+try:
+    from .formats import hdf5
+    _image_type_map['Hierarchical Data Format (version 5) data'] = hdf5.HDF5DataFile
+except FormatNotAvailable:
+    pass
+
 
 def read_image(filename, header_only=False):
     """Determine the file type using libmagic, open the image using the correct image IO 
@@ -23,13 +32,11 @@ def read_image(filename, header_only=False):
         - header: A dictionary 
         - image:  The actual PIL image of type 'I'
     """
-    
-    
+
     full_id = magic.from_file(filename).strip()
     key = full_id.split(', ')[0].strip()
-    if _image_type_map.get(key) is not None:
-        objClass = _image_type_map.get(key)
-        #FIXME: should throw an except if img object could not be created
+    objClass = _image_type_map.get(key)
+    if objClass:
         img_obj = objClass(filename, header_only)
         return img_obj
     else:
