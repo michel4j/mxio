@@ -69,11 +69,13 @@ class HDF5DataFile(object):
             self.header['rotation_axis'] = axis
             if start_angles.mean() != 0.0 and delta_angle*total_angle != 0.0:
                 break
-        self.header['frame_sets'] = sorted(self.raw['/entry/data'].keys())
+
 
     def _read_frame(self):
-        section = self.raw[self.header['frame_sets'][0]].value
-        data = section[0]
+        keys = sorted(self.raw['/entry/data'].keys())
+        section = self.raw['/entry/data/{}'.format(keys[0])]
+        'Section has {} frames'.format(section.shape[0])
+        data = section.value[0]
         self.header['average_intensity'] = max(0.0, data.mean())
         self.header['min_intensity'] = data.min()
         self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
