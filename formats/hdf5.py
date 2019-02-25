@@ -83,7 +83,7 @@ class HDF5DataFile(object):
         self.header['overloads'] = 0 #en(numpy.where(data >= self.header['saturated_value'])[0])
         self.data = data
         self.image = Image.fromarray(data, 'F')
-        #self.image = self.image.convert('I')
+        self.image = self.image.convert('I')
 
 
 
