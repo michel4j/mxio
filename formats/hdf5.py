@@ -76,7 +76,7 @@ class HDF5DataFile(object):
         keys = sorted(self.raw['/entry/data'].keys())
         section = self.raw['/entry/data/{}'.format(keys[0])]
         'Section has {} frames'.format(section.shape[0])
-        data = section.value[0]
+        data = section.value.sum(axis=1)
         self.header['average_intensity'] = max(0.0, data.mean())
         self.header['min_intensity'] = data.min()
         self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
