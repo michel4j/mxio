@@ -1,11 +1,11 @@
 import bitshuffle.h5
 import tables
 import h5py
-import utils
 import numpy
 
 from PIL import Image
 from ..log import get_module_logger
+from .. import utils
 
 # Configure Logging
 logger = get_module_logger('imageio')
