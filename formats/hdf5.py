@@ -82,6 +82,7 @@ class HDF5DataFile(object):
         valid = self.mask & (data < self.header['saturated_value'])
         self.header['average_intensity'] = data[valid].mean()
         self.header['min_intensity'] = 0
+        self.header['max_intensity'] = data[valid].max()
         self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
         self.header['overloads'] = self.mask.sum() - valid.sum()
         self.image = Image.fromarray(data)
