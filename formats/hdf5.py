@@ -38,6 +38,7 @@ class HDF5DataFile(object):
     def __init__(self, filename, header_only=False):
         self.raw = h5py.File(filename, 'r')
         self.filename = filename
+        self.mask = None
         self._read_header()
         if not header_only:
             self._read_frame()
@@ -73,18 +74,19 @@ class HDF5DataFile(object):
 
     def _read_frame(self):
         keys = sorted(self.raw['/entry/data'].keys())
+        if self.mask is None:
+            self.mask = numpy.invert(self.raw['/entry/instrument/detector/detectorSpecific/pixel_mask'][()].astype(bool))
+
         section = self.raw['/entry/data/{}'.format(keys[0])]
         data = section[0]
-        self.header['average_intensity'] = max(0.0, data.mean())
+        valid = self.mask & (data < self.header['saturated_value'])
+        self.header['average_intensity'] = data[valid].mean()
         self.header['min_intensity'] = 0
-        self.header['gamma'] = 1 # utils.calc_gamma(self.header['average_intensity'])
-        self.header['overloads'] = 0 #en(numpy.where(data >= self.header['saturated_value'])[0])
-        self.data = data
+        self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
+        self.header['overloads'] = self.mask.sum() - valid.sum()
         self.image = Image.fromarray(data)
         self.image = self.image.convert('I')
-
-
-
+        self.data = data.T
 
 
 __all__ = ['HDF5DataFile']
