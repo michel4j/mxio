@@ -339,7 +339,7 @@ class CBFDataSet(DataSet):
 
     def read_header(self):
         self.header = {}
-        self.header.update(self.raw_data)
+        self.header.update(self.raw_header)
         self.header.update({
             'format': 'CBF',
             'name': self.name,
