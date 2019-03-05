@@ -332,7 +332,7 @@ class CBFDataSet(DataSet):
             self.root_name = filename
         self.name = os.path.basename(self.root_name)
         self.current_frame = 1
-        self.raw_header, self.raw_data, self.raw_image = read_cbf(filename, header_only)
+        self.raw_header, self.raw_data, self.raw_image = read_cbf(filename)
         self.read_header()
         if not header_only:
             self.read_image()
