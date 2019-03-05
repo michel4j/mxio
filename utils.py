@@ -44,7 +44,6 @@ def file_sequences(filename):
         width = len(params['number'])
         current =  int(params['number'])
         p2 = re.compile('{root_name}_(?P<number>\d{{{width}}}).{extension}'.format(width=width, **params))
-        print p2.pattern
         frames = [int(m.group(1)) for f in files for m in [p2.match(f)] if m]
 
         template = os.path.join(directory, '{root_name}_{{field}}.{extension}'.format(**params))
