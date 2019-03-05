@@ -1,24 +1,22 @@
-'''
-Created on Nov 25, 2010
 
-@author: michel
-'''
 import math
 import struct
 
 import numpy
 from PIL import Image
-from ..utils import calc_gamma
+from ..import utils
+from . import DataSet
 
 
-class MarCCDImageFile(object):
+class MarCCDDataSet(DataSet):
     def __init__(self, filename, header_only=False):
+        super(MarCCDDataSet, self).__init__()
         self.filename = filename
-        self._read_header()
+        self.read_header()
         if not header_only:
-            self._read_image()
+            self.read_image()
 
-    def _read_header(self):
+    def read_header(self):
         header = {}
 
         # Read MarCCD header
@@ -43,8 +41,6 @@ class MarCCDImageFile(object):
         goniostat_pars = struct.unpack(goniostat_format, myfile.read(128))
         detector_pars = struct.unpack(detector_format, myfile.read(128))
         source_pars = struct.unpack(source_format, myfile.read(128))
-        # file_pars = struct.unpack(file_format, myfile.read(1024))
-        # dataset_pars = struct.unpack(dataset_format, myfile.read(512))
         myfile.close()
 
         # extract some values from the header
@@ -69,13 +65,17 @@ class MarCCDImageFile(object):
         header['two_theta'] = (goniostat_pars[7] / 1e3) * math.pi / -180.0
         header['detector_size'] = (header_pars[17], header_pars[18])
         header['filename'] = self.filename
+        header['dataset'] = utils.file_sequences(self.filename)
+
+        if header['dataset']:
+            self.cur_frame = header['dataset']['sequence']
 
         det_mm = int(round(header['pixel_size'] * header['detector_size'][0]))
         header['detector_type'] = 'mar%d' % det_mm
         header['file_format'] = 'TIFF'
         self.header = header
 
-    def _read_image(self):
+    def read_image(self):
         raw_img = Image.open(self.filename)
         self.raw_data = raw_img.load()
         self.data = numpy.fromstring(raw_img.tobytes(), 'H').reshape(*self.header['detector_size']).transpose()
@@ -83,8 +83,8 @@ class MarCCDImageFile(object):
         # recalculate average intensity if not present within file
         if self.header['average_intensity'] < 0.01:
             self.header['average_intensity'] = max(0.0, numpy.mean(self.data))
-        self.header['gamma'] = calc_gamma(self.header['average_intensity'])
+        self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
         self.image = raw_img.convert('I')
 
 
-__all__ = ['MarCCDImageFile']
+__all__ = ['MarCCDDataSet']

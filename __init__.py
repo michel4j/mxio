@@ -4,22 +4,22 @@ from . import magic
 from .common import *
 
 _image_type_map = {
-    'marCCD Area Detector Image' : marccd.MarCCDImageFile,
-    'SMV Area Detector Image' : smv.SMVImageFile,
-    'R-Axis Area Detector Image': raxis.RAXISImageFile,
+    'marCCD Area Detector Image' : marccd.MarCCDDataSet,
+    'SMV Area Detector Image' : smv.SMVDataSet,
+    'R-Axis Area Detector Image': raxis.RAXISDataSet,
 
 }
 
 try:
     from .formats import cbf
-    _image_type_map['CBF Area Detector Image'] = cbf.CBFImageFile
+    _image_type_map['CBF Area Detector Image'] = cbf.CBFDataSet
 except FormatNotAvailable:
     pass
 
 
 try:
     from .formats import hdf5
-    _image_type_map['Hierarchical Data Format (version 5) data'] = hdf5.HDF5DataFile
+    _image_type_map['Hierarchical Data Format (version 5) data'] = hdf5.HDF5DataSet
 except FormatNotAvailable:
     pass
 

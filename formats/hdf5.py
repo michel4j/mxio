@@ -1,11 +1,13 @@
 import bitshuffle.h5
-import tables
+import os
+import re
 import h5py
 import numpy
 
 from PIL import Image
 from ..log import get_module_logger
 from .. import utils
+from . import DataSet
 
 # Configure Logging
 logger = get_module_logger('imageio')
@@ -20,8 +22,6 @@ HEADER_FIELDS = {
     'date': '/entry/instrument/detector/detectorSpecific/data_collection_date',
     'distance': '/entry/instrument/detector/detector_distance',
     'beam_center': ('/entry/instrument/detector/beam_center_x', '/entry/instrument/detector/beam_center_y'),
-    #'start_angle': '/entry/sample/goniometer/omega',
-    #'delta_angle': '/entry/sample/goniometer/omega_range_average',
     'saturated_value': '/entry/instrument/detector/detectorSpecific/countrate_correction_count_cutoff',
     'num_frames': '/entry/instrument/detector/detectorSpecific/nimages',
     'energy': '/entry/instrument/detector/detectorSpecific/photon_energy',
@@ -34,16 +34,34 @@ HEADER_FIELDS = {
 OSCILLATION_FIELDS = '/entry/sample/goniometer/{}'
 
 
-class HDF5DataFile(object):
+class HDF5DataSet(DataSet):
     def __init__(self, filename, header_only=False):
-        self.raw = h5py.File(filename, 'r')
-        self.filename = filename
-        self.mask = None
-        self._read_header()
-        if not header_only:
-            self._read_frame()
+        super(HDF5DataSet, self).__init__()
+        p0 = re.compile('^(?P<root_name>.+)_master\.h5$')
+        p1 = re.compile('^(?P<root_name>.+)_data_\d+\.h5')
+        m0 = p0.match(filename)
+        m1 = p1.match(filename)
+        if m0:
+            params = m0.groupdict()
+            self.master_file = filename
+            self.root_name = params['root_name']
+        elif m1:
+            params = m1.groupdict()
+            self.master_file = params['root_name'] + '_master.h5'
+            self.root_name = params['root_name']
+        else:
+            self.master_file = filename
+            self.root_name = ""
+            logger.error('Unable to recognize HDF5 dataset')
+        self.directory, self.filename = os.path.split(os.path.abspath(self.master_file))
+        self.raw = h5py.File(self.master_file, 'r')
 
-    def _read_header(self):
+        self.mask = None
+        self.read_header()
+        if not header_only:
+            self.read_image()
+
+    def read_header(self):
         self.header = {}
         for key, field in HEADER_FIELDS.items():
             try:
@@ -58,7 +76,9 @@ class HDF5DataFile(object):
         self.header['distance'] *= 1000
         self.header['sensor_thickness'] *= 1000
         self.header['pixel_size'] = 1000*self.header['pixel_size'][0]
-        self.header['filename'] = self.filename
+        self.header['filename'] = self.master_file
+        self.header['sections'] = sorted(self.raw['/entry/data'].keys())
+        self.header['dataset'] = utils.file_sequences(self.root_name + '_' + self.header['sections'][0] + '.h5')
 
         # try to find oscillation axis and parameters as first non-zero average
         for axis in ['chi', 'kappa', 'omega', 'phi']:
@@ -72,12 +92,11 @@ class HDF5DataFile(object):
             if start_angles.mean() != 0.0 and delta_angle*total_angle != 0.0:
                 break
 
-    def _read_frame(self):
-        keys = sorted(self.raw['/entry/data'].keys())
+    def read_image(self):
         if self.mask is None:
             self.mask = numpy.invert(self.raw['/entry/instrument/detector/detectorSpecific/pixel_mask'][()].astype(bool))
 
-        section = self.raw['/entry/data/{}'.format(keys[0])]
+        section = self.raw['/entry/data/{}'.format(self.header['sections'][0])]
         data = section[0]
         valid = self.mask & (data < self.header['saturated_value'])
         self.header['average_intensity'] = data[valid].mean()
@@ -90,4 +109,4 @@ class HDF5DataFile(object):
         self.data = data.T
 
 
-__all__ = ['HDF5DataFile']
+__all__ = ['HDF5DataSet']

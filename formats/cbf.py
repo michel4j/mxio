@@ -10,8 +10,8 @@ from ctypes import *
 
 import numpy
 from PIL import Image
-from .. import utils
-from .. import parser
+from . import DataSet
+from .. import utils, parser
 from ..common import *
 from ..log import get_module_logger
 
@@ -152,8 +152,9 @@ def get_max_int(t):
         return c_double(2 ** (8 * sizeof(t) - 1))
 
 
-class CBFImageFile(object):
+class CBFDataSet(DataSet):
     def __init__(self, filename, header_only=False):
+        super(CBFDataSet, self).__init__()
         self._cbflib = cbflib  # keep a reference until all objects are destroyed
         self.filename = filename
         self.handle = c_void_p()
@@ -169,12 +170,12 @@ class CBFImageFile(object):
         res |= cbflib.cbf_read_template(self.handle, fp)
         res |= cbflib.cbf_construct_goniometer(self.handle, byref(self.goniometer))
         res |= cbflib.cbf_require_reference_detector(self.handle, byref(self.detector), 0)
-        self._read_header()
+        self.read_header()
 
         if not header_only:
-            self._read_image()
+            self.read_image()
 
-    def _read_mime(self):
+    def read_mime(self):
         hr = re.compile('^(.+):\s+(.+)$')
         bin_st = re.compile('^--CIF-BINARY-FORMAT-SECTION--')
         mime_header = {}
@@ -211,11 +212,11 @@ class CBFImageFile(object):
         fh.close()
         return mime_header
 
-    def _read_header(self):
+    def read_header(self):
         header = {}
 
         # First parse mime-header
-        self.mime_header = self._read_mime()
+        self.mime_header = self.read_mime()
 
         wvl = c_double(1.0)
         res = cbflib.cbf_get_wavelength(self.handle, byref(wvl))
@@ -299,9 +300,10 @@ class CBFImageFile(object):
                 header['sensor_thickness'] = info['sensor_thickness'] * 1000
             else:
                 _logger.debug('miniCBF with no header')
+        self.header['dataset'] = utils.file_sequences(self.filename)
         self.header = header
 
-    def _read_image(self):
+    def read_image(self):
         num_el = self.header['detector_size'][0] * self.header['detector_size'][1]
         el_params = DECODER_DICT[self.mime_header.get('X-Binary-Element-Type', 'signed 32-bit integer')]
         el_type = el_params[0]
@@ -335,4 +337,4 @@ class CBFImageFile(object):
         res |= self._cbflib.cbf_free_goniometer(self.goniometer)
         res |= self._cbflib.cbf_free_detector(self.detector)
 
-__all__ = ['CBFImageFile']
+__all__ = ['CBFDataSet']

@@ -8,7 +8,8 @@ import re
 
 import numpy
 from PIL import Image
-from ..utils import calc_gamma
+from ..import utils
+from . import DataSet
 
 DECODER_DICT = {
     "unsigned_short": (ctypes.c_uint16, 'F;16','F;16B'),
@@ -18,14 +19,15 @@ DECODER_DICT = {
 }
 
 
-class SMVImageFile(object):
+class SMVDataSet(DataSet):
     def __init__(self, filename, header_only=False):
+        super(SMVDataSet, self).__init__()
         self.filename = filename
-        self._read_header()
+        self.read_header()
         if not header_only:
-            self._read_image()
+            self.read_image()
 
-    def _read_header(self):
+    def read_header(self):
         """
         Read SMV image headers
         returns a dictionary of header parameters
@@ -94,9 +96,10 @@ class SMVImageFile(object):
         info['filename'] = self.filename
         
         info['saturated_value'] = 2**(8*ctypes.sizeof(self._el_type)) - 1
+        info['dataset'] = utils.file_sequences(self.filename)
         self.header = info
 
-    def _read_image(self):
+    def read_image(self):
         num_el = self.header['detector_size'][0] * self.header['detector_size'][1]
         el_size = ctypes.sizeof(self._el_type)
         data_size = num_el*el_size
@@ -110,7 +113,7 @@ class SMVImageFile(object):
         self.image = self.image.convert('I')
         self.header['average_intensity'] = max(0.0, self.data.mean())
         self.header['min_intensity'], self.header['max_intensity'] = self.data.min(), self.data.max()
-        self.header['gamma'] = calc_gamma(self.header['average_intensity'])
+        self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
         self.header['overloads'] = len(numpy.where(self.data >= self.header['saturated_value'])[0])
 
-__all__ = ['SMVImageFile']
+__all__ = ['SMVDataSet']

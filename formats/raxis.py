@@ -8,11 +8,12 @@ import struct
 
 import numpy
 from PIL import Image
-from ..utils import calc_gamma
+from ..import utils
+from . import DataSet
 
-
-class RAXISImageFile(object):
+class RAXISDataSet(object):
     def __init__(self, filename, header_only=False):
+        super(RAXISDataSet, self).__init__()
         self.filename = filename
         self._read_header()
         if not header_only:
@@ -21,7 +22,10 @@ class RAXISImageFile(object):
     def _read_header(self):
         header = {}
 
-        # Read MarCCD header
+        # Read RAXIS header
+        with open(self.filename, 'rb') as fileobj:
+            header_bytes = fileobj.read(1024)
+
         header_format = 'I16s39I80x'  # 256 bytes
         statistics_format = '3Q7I9I40x128H'  # 128 + 256 bytes
         goniostat_format = '28i16x'  # 128 bytes
@@ -69,6 +73,7 @@ class RAXISImageFile(object):
         header['two_theta'] = (goniostat_pars[7] / 1e3) * math.pi / -180.0
         header['detector_size'] = (header_pars[17], header_pars[18])
         header['filename'] = self.filename
+        header['dataset'] = utils.file_sequences(self.filename)
 
         det_mm = int(round(header['pixel_size'] * header['detector_size'][0]))
         header['detector_type'] = 'mar%d' % det_mm
@@ -82,8 +87,8 @@ class RAXISImageFile(object):
         # recalculate average intensity if not present within file
         if self.header['average_intensity'] < 0.01:
             self.header['average_intensity'] = numpy.mean(numpy.fromstring(raw_img.tostring(), 'H'))
-        self.header['gamma'] = calc_gamma(self.header['average_intensity'])
+        self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
         self.image = raw_img.convert('I')
 
 
-__all__ = ['RAXISImageFile']
+__all__ = ['RAXISDataSet']
