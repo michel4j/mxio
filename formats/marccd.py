@@ -64,13 +64,13 @@ def read_marccd(filename, with_image=True):
 
     if with_image:
         raw_img = Image.open(filename)
-        raw_data = raw_img.load()
         data = numpy.fromstring(raw_img.tobytes(), 'H').reshape(*header['detector_size']).transpose()
+        image = raw_img.convert('I')
     else:
-        raw_img = None
         data = None
+        image = None
 
-    return header, data, raw_img
+    return header, data, image
 
 
 class MarCCDDataSet(DataSet):
