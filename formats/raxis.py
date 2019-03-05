@@ -5,7 +5,8 @@ Created on Nov 25, 2010
 '''
 import math
 import struct
-
+import re
+import os
 import numpy
 from PIL import Image
 from ..import utils
@@ -15,6 +16,15 @@ class RAXISDataSet(object):
     def __init__(self, filename, header_only=False):
         super(RAXISDataSet, self).__init__()
         self.filename = filename
+        p0 = re.compile('^(?P<root_name>.+)_\d+\.[^.]+$')
+        m0 = p0.match(self.filename)
+        if m0:
+            params = m0.groupdict()
+            self.root_name = params['root_name']
+        else:
+            self.root_name = filename
+        self.name = os.path.basename(self.root_name)
+
         self._read_header()
         if not header_only:
             self._read_image()
@@ -58,6 +68,7 @@ class RAXISDataSet(object):
         else:
             header['beam_center'] = goniostat_pars[1] / 1e3, goniostat_pars[2] / 1e3
 
+        header['name'] = self.name
         header['distance'] = goniostat_pars[0] / 1e3
         header['wavelength'] = source_pars[3] / 1e5
         header['pixel_size'] = detector_pars[1] / 1e6
@@ -77,7 +88,7 @@ class RAXISDataSet(object):
 
         det_mm = int(round(header['pixel_size'] * header['detector_size'][0]))
         header['detector_type'] = 'mar%d' % det_mm
-        header['file_format'] = 'TIFF'
+        header['format'] = 'TIFF'
         self.header = header
 
     def _read_image(self):

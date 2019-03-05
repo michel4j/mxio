@@ -37,27 +37,32 @@ OSCILLATION_FIELDS = '/entry/sample/goniometer/{}'
 class HDF5DataSet(DataSet):
     def __init__(self, filename, header_only=False):
         super(HDF5DataSet, self).__init__()
+        self.master_file = filename
         p0 = re.compile('^(?P<root_name>.+)_master\.h5$')
-        p1 = re.compile('^(?P<root_name>.+)_data_\d+\.h5')
+        p1 = re.compile('^(?P<root_name>.+)_(?P<section>data_\d+)\.h5')
         m0 = p0.match(filename)
         m1 = p1.match(filename)
+        self.current_section = None
+        self.current_frame = 1
+        self.disk_sections = []
+        self.section_names = []
         if m0:
             params = m0.groupdict()
-            self.master_file = filename
             self.root_name = params['root_name']
         elif m1:
             params = m1.groupdict()
             self.master_file = params['root_name'] + '_master.h5'
             self.root_name = params['root_name']
+            self.current_section = params['section']
         else:
             self.master_file = filename
-            self.root_name = ""
-            logger.error('Unable to recognize HDF5 dataset')
-        self.directory, self.filename = os.path.split(os.path.abspath(self.master_file))
+            self.root_name = os.path.splitext(self.master_file)[0]
+        self.directory = os.path.dirname(os.path.abspath(self.master_file))
+        self.name = os.path.basename(self.root_name)
         self.raw = h5py.File(self.master_file, 'r')
-
         self.mask = None
         self.read_header()
+
         if not header_only:
             self.read_image()
 
@@ -72,13 +77,19 @@ class HDF5DataSet(DataSet):
             except ValueError:
                 logger.error('Field corresponding to {} not found!'.format(key))
 
-        self.header['file_format'] ='HDF5'
+        self.header['name'] = self.name
+        self.header['format'] ='HDF5'
         self.header['distance'] *= 1000
         self.header['sensor_thickness'] *= 1000
         self.header['pixel_size'] = 1000*self.header['pixel_size'][0]
         self.header['filename'] = self.master_file
-        self.header['sections'] = sorted(self.raw['/entry/data'].keys())
-        self.header['dataset'] = utils.file_sequences(self.root_name + '_' + self.header['sections'][0] + '.h5')
+        self.header['sections'] = {
+            name: (d.attrs['image_nr_low'], d.attrs['image_nr_high']) for name, d in self.raw['/entry/data'].items()
+        }
+        self.section_names = sorted(self.header['sections'].keys())
+        if not self.current_section:
+            self.current_section = self.section_names[0]
+        self.current_frame = self.header['sections'][self.current_section][0]
 
         # try to find oscillation axis and parameters as first non-zero average
         for axis in ['chi', 'kappa', 'omega', 'phi']:
@@ -92,12 +103,17 @@ class HDF5DataSet(DataSet):
             if start_angles.mean() != 0.0 and delta_angle*total_angle != 0.0:
                 break
 
+        self.check_disk_sections()
+
     def read_image(self):
         if self.mask is None:
-            self.mask = numpy.invert(self.raw['/entry/instrument/detector/detectorSpecific/pixel_mask'][()].astype(bool))
+            self.mask = numpy.invert(
+                self.raw['/entry/instrument/detector/detectorSpecific/pixel_mask'][()].astype(bool)
+            )
 
-        section = self.raw['/entry/data/{}'.format(self.header['sections'][0])]
-        data = section[0]
+        section = self.raw['/entry/data/{}'.format(self.current_section)]
+        frame_index = max(self.current_frame - self.header['sections'][self.current_section][0], 0)
+        data = section[frame_index]
         valid = self.mask & (data < self.header['saturated_value'])
         self.header['average_intensity'] = data[valid].mean()
         self.header['min_intensity'] = 0
@@ -107,6 +123,77 @@ class HDF5DataSet(DataSet):
         self.image = Image.fromarray(data)
         self.image = self.image.convert('I')
         self.data = data.T
+
+    def check_disk_sections(self):
+        self.header['dataset'] = utils.file_sequences(self.root_name + '_' + self.section_names[0] + '.h5')
+        if self.header['dataset']:
+            tmpl = self.header['dataset']['name']
+            self.disk_sections = [
+                section_name for i, section_name in enumerate(self.section_names)
+                if os.path.exists(tmpl.format(i+1))
+            ]
+
+    def get_frame(self, index=1):
+        """
+        Load a specific frame
+        :param index: frame index
+        :return:
+        """
+        self.check_disk_sections()
+        for section_name, section_limits in self.header['sections'].items():
+            if section_name in self.disk_sections:
+                if section_limits[0] <= index <= section_limits[1]:
+                    self.current_frame = index
+                    self.current_section = section_name
+                    self.read_image()
+                    return True
+        return False
+
+    def next_frame(self):
+        """Load the next frame in the dataset"""
+        self.check_disk_sections()
+        next_frame = self.current_frame + 1
+        section_limits = self.header['sections'][self.current_section]
+        if next_frame <= section_limits[1]:
+            self.current_frame = next_frame
+        else:
+            # skip to first image of next section
+            i = self.section_names.index(self.current_section) + 1
+            if i <= len(self.section_names)-1:
+                next_section = self.section_names[i]
+                next_frame = self.header['sections'][next_section][0]
+                if next_section in self.disk_sections:
+                    self.current_frame = next_frame
+                    self.current_section = next_section
+                else:
+                    return False
+            else:
+                return False
+        self.read_image()
+        return True
+
+    def prev_frame(self):
+        """Load the previous frame in the dataset"""
+        self.check_disk_sections()
+        next_frame = self.current_frame - 1
+        section_limits = self.header['sections'][self.current_section]
+        if next_frame >= section_limits[0]:
+            self.current_frame = next_frame
+        else:
+            # skip to last image of prev section
+            i = self.section_names.index(self.current_section) - 1
+            if i >= 0:
+                next_section = self.section_names[i]
+                next_frame = self.header['sections'][next_section][1]
+                if next_section in self.disk_sections:
+                    self.current_frame = next_frame
+                    self.current_section = next_section
+                else:
+                    return False
+            else:
+                return False
+        self.read_image()
+        return True
 
 
 __all__ = ['HDF5DataSet']

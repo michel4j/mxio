@@ -3,6 +3,7 @@
 class DataSet(object):
     def __init__(self):
         self.header = {}
+        self.name = ''
 
     def read_header(self):
         raise NotImplementedError('Not implemented!')

@@ -92,7 +92,7 @@ class SMVDataSet(DataSet):
             info['detector_type'] = 'q315'
         elif info['detector_size'][0] == 3072:
             info['detector_type'] = 'q315-2x'
-        info['file_format'] = 'SMV'
+        info['format'] = 'SMV'
         info['filename'] = self.filename
         
         info['saturated_value'] = 2**(8*ctypes.sizeof(self._el_type)) - 1

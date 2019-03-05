@@ -4,7 +4,7 @@ Overview
 
     This module provides an object oriented interface to CBFlib.
 """
-
+import os
 import re
 from ctypes import *
 
@@ -152,48 +152,37 @@ def get_max_int(t):
         return c_double(2 ** (8 * sizeof(t) - 1))
 
 
-class CBFDataSet(DataSet):
-    def __init__(self, filename, header_only=False):
-        super(CBFDataSet, self).__init__()
-        self._cbflib = cbflib  # keep a reference until all objects are destroyed
-        self.filename = filename
-        self.handle = c_void_p()
-        self.goniometer = c_void_p()
-        self.detector = c_void_p()
+def read_cbf(filename, with_image=True):
+    handle = c_void_p()
+    goniometer = c_void_p()
+    detector = c_void_p()
 
-        # make the handle
-        res = cbflib.cbf_make_handle(byref(self.handle))
+    # make the handle and read the file
+    res = cbflib.cbf_make_handle(byref(handle))
+    fp = libc.fopen(filename, "rb")
+    res |= cbflib.cbf_read_template(handle, fp)
+    res |= cbflib.cbf_construct_goniometer(handle, byref(goniometer))
+    res |= cbflib.cbf_require_reference_detector(handle, byref(detector), 0)
 
-        # read the file
-        fp = libc.fopen(self.filename, "rb")
-        # res = cbflib.cbf_read_widefile(self.handle, fp, MSG_NODIGEST)
-        res |= cbflib.cbf_read_template(self.handle, fp)
-        res |= cbflib.cbf_construct_goniometer(self.handle, byref(self.goniometer))
-        res |= cbflib.cbf_require_reference_detector(self.handle, byref(self.detector), 0)
-        self.read_header()
+    # read mime
+    hr = re.compile('^(.+):\s+(.+)$')
+    bin_st = re.compile('^--CIF-BINARY-FORMAT-SECTION--')
+    mime_header = {}
+    parse_tokens = {
+        "Content-Type": str,
+        "Content-Transfer-Encoding": str,
+        "Content-MD5": str,
+        "X-Binary-Size": int,
+        "X-Binary-ID": int,
+        "X-Binary-Element-Type": str,
+        "X-Binary-Element-Byte-Order": str,
+        "X-Binary-Number-of-Elements": int,
+        "X-Binary-Size-Fastest-Dimension": int,
+        "X-Binary-Size-Second-Dimension": int,
+        "X-Binary-Size-Third-Dimension": int,
+        "X-Binary-Size-Padding": int}
 
-        if not header_only:
-            self.read_image()
-
-    def read_mime(self):
-        hr = re.compile('^(.+):\s+(.+)$')
-        bin_st = re.compile('^--CIF-BINARY-FORMAT-SECTION--')
-        mime_header = {}
-        parse_tokens = {
-            "Content-Type": str,
-            "Content-Transfer-Encoding": str,
-            "Content-MD5": str,
-            "X-Binary-Size": int,
-            "X-Binary-ID": int,
-            "X-Binary-Element-Type": str,
-            "X-Binary-Element-Byte-Order": str,
-            "X-Binary-Number-of-Elements": int,
-            "X-Binary-Size-Fastest-Dimension": int,
-            "X-Binary-Size-Second-Dimension": int,
-            "X-Binary-Size-Third-Dimension": int,
-            "X-Binary-Size-Padding": int}
-
-        fh = open(self.filename)
+    with open(filename) as fh:
         # find start of binary header
         i = 0
         while not bin_st.match(fh.readline()) and i < 512:
@@ -209,132 +198,193 @@ class CBFDataSet(DataSet):
             if m:
                 mime_header[m.group(1)] = parse_tokens[m.group(1)](m.group(2).replace('"', '').strip())
             l = fh.readline()
-        fh.close()
-        return mime_header
 
-    def read_header(self):
-        header = {}
+    # read header
+    header  = {}
+    wvl = c_double(1.0)
+    res = cbflib.cbf_get_wavelength(handle, byref(wvl))
+    header['wavelength'] = wvl.value
 
-        # First parse mime-header
-        self.mime_header = self.read_mime()
+    sz1 = c_size_t(mime_header.get('X-Binary-Size-Fastest-Dimension', 0))
+    sz2 = c_size_t(mime_header.get('X-Binary-Size-Second-Dimension', 0))
+    header['detector_size'] = (sz1.value, sz2.value)
 
-        wvl = c_double(1.0)
-        res = cbflib.cbf_get_wavelength(self.handle, byref(wvl))
-        header['wavelength'] = wvl.value
+    px1 = c_double(1.0)
+    res |= cbflib.cbf_get_pixel_size(handle, 0, 1, byref(px1))
+    header['pixel_size'] = px1.value
 
-        sz1 = c_size_t(self.mime_header.get('X-Binary-Size-Fastest-Dimension', 0))
-        sz2 = c_size_t(self.mime_header.get('X-Binary-Size-Second-Dimension', 0))
-        # res |= cbflib.cbf_get_image_size(self.handle, 0, 0, byref(sz1), byref(sz2))
-        header['detector_size'] = (sz1.value, sz2.value)
+    dst = c_double(999.0)
+    res |= cbflib.cbf_get_detector_distance(detector, byref(dst))
+    header['distance'] = dst.value
 
-        px1 = c_double(1.0)
-        res |= cbflib.cbf_get_pixel_size(self.handle, 0, 1, byref(px1))
-        header['pixel_size'] = px1.value
+    dx, dy = c_double(0.0), c_double(0.0)
+    ix, iy = c_double(sz1.value / 2.0), c_double(sz2.value / 2.0)
+    res |= cbflib.cbf_get_beam_center(detector, byref(ix), byref(iy), byref(dx), byref(dy))
+    header['beam_center'] = (ix.value, iy.value)
 
-        dst = c_double(999.0)
-        res |= cbflib.cbf_get_detector_distance(self.detector, byref(dst))
-        header['distance'] = dst.value
+    it = c_double(0.0)
+    res |= cbflib.cbf_get_integration_time(handle, 0, it)
+    header['exposure_time'] = it.value
 
-        dx, dy = c_double(0.0), c_double(0.0)
-        ix, iy = c_double(sz1.value / 2.0), c_double(sz2.value / 2.0)
-        res |= cbflib.cbf_get_beam_center(self.detector, byref(ix), byref(iy), byref(dx), byref(dy))
-        header['beam_center'] = (ix.value, iy.value)
+    st, inc = c_double(0.0), c_double(0.0)
+    res |= cbflib.cbf_get_rotation_range(goniometer, 0, byref(st), byref(inc))
+    header['start_angle'] = st.value
+    header['delta_angle'] = inc.value
 
-        it = c_double(0.0)
-        res |= cbflib.cbf_get_integration_time(self.handle, 0, it)
-        header['exposure_time'] = it.value
+    el_type = DECODER_DICT[mime_header.get('X-Binary-Element-Type', 'signed 32-bit integer')][0]
+    ovl = get_max_int(el_type)
+    res |= cbflib.cbf_get_overload(handle, 0, byref(ovl))
+    header['saturated_value'] = ovl.value
 
-        st, inc = c_double(0.0), c_double(0.0)
-        res |= cbflib.cbf_get_rotation_range(self.goniometer, 0, byref(st), byref(inc))
-        header['start_angle'] = st.value
-        header['delta_angle'] = inc.value
+    nx, ny, nz = c_double(0.0), c_double(0.0), c_double(0.0)
+    res |= cbflib.cbf_get_detector_normal(detector, byref(nx), byref(ny), byref(nx))
+    detector_norm = numpy.array([nx.value, ny.value, nz.value])
 
-        el_type = DECODER_DICT[self.mime_header.get('X-Binary-Element-Type', 'signed 32-bit integer')][0]
-        ovl = get_max_int(el_type)
-        res |= cbflib.cbf_get_overload(self.handle, 0, byref(ovl))
-        header['saturated_value'] = ovl.value
+    nx, ny, nz = c_double(0.0), c_double(0.0), c_double(0.0)
+    res |= cbflib.cbf_get_rotation_axis(goniometer, 0, byref(nx), byref(ny), byref(nx))
+    rot_axis = numpy.array([nx.value, ny.value, nz.value])
 
-        nx, ny, nz = c_double(0.0), c_double(0.0), c_double(0.0)
-        res |= cbflib.cbf_get_detector_normal(self.detector, byref(nx), byref(ny), byref(nx))
-        detector_norm = numpy.array([nx.value, ny.value, nz.value])
+    # FIXME Calculate actual two_theta from the beam direction and detector normal
+    header['two_theta'] = 0.0
+    del rot_axis, detector_norm
 
-        nx, ny, nz = c_double(0.0), c_double(0.0), c_double(0.0)
-        res |= cbflib.cbf_get_rotation_axis(self.goniometer, 0, byref(nx), byref(ny), byref(nx))
-        rot_axis = numpy.array([nx.value, ny.value, nz.value])
+    header['filename'] = filename
 
-        # FIXME Calculate actual two_theta from the beam direction and detector normal
-        header['two_theta'] = 0.0
-        del rot_axis, detector_norm
+    det_id = c_char_p()
+    res |= cbflib.cbf_get_detector_id(handle, 0, byref(det_id))
+    header['detector_type'] = det_id.value
+    if header['detector_type'] == None:
+        header['detector_type'] = 'Unknown'
+    header['format'] = 'CBF'
 
-        header['filename'] = self.filename
+    if header['distance'] == 999.0 and header['delta_angle'] == 0.0 and header['exposure_time'] == 0.0:
+        res = cbflib.cbf_select_datablock(handle, c_uint(0))
+        res |= cbflib.cbf_find_category(handle, "array_data")
+        res |= cbflib.cbf_find_column(handle, "header_convention")
+        hdr_type = c_char_p()
+        res |= cbflib.cbf_get_value(handle, byref(hdr_type))
+        res |= cbflib.cbf_find_column(handle, "header_contents")
+        hdr_contents = c_char_p()
+        res |= cbflib.cbf_get_value(handle, byref(hdr_contents))
+        if res == 0 and hdr_type.value != 'XDS special':
+            _logger.debug('miniCBF header type found: %s' % hdr_type.value)
+            info = parser.parse_text(hdr_contents.value, hdr_type.value)
+            header['detector_type'] = info['detector'].lower().strip().replace(' ', '')
+            header['two_theta'] = 0 if not info['two_theta'] else round(info['two_theta'], 2)
+            header['pixel_size'] = round(info['pixel_size'][0] * 1000, 5)
+            header['exposure_time'] = info['exposure_time']
+            header['wavelength'] = info['wavelength']
+            header['distance'] = info['distance'] * 1000
+            header['beam_center'] = info['beam_center']
+            header['start_angle'] = info['start_angle']
+            header['delta_angle'] = info['delta_angle']
+            header['saturated_value'] = info['saturated_value']
+            header['sensor_thickness'] = info['sensor_thickness'] * 1000
+        else:
+            _logger.debug('miniCBF with no header')
+    header['dataset'] = utils.file_sequences(filename)
 
-        det_id = c_char_p()
-        res |= cbflib.cbf_get_detector_id(self.handle, 0, byref(det_id))
-        header['detector_type'] = det_id.value
-        if header['detector_type'] == None:
-            header['detector_type'] = 'Unknown'
-        header['file_format'] = 'CBF'
-
-        if header['distance'] == 999.0 and header['delta_angle'] == 0.0 and header['exposure_time'] == 0.0:
-            res = cbflib.cbf_select_datablock(self.handle, c_uint(0))
-            res |= cbflib.cbf_find_category(self.handle, "array_data")
-            res |= cbflib.cbf_find_column(self.handle, "header_convention")
-            hdr_type = c_char_p()
-            res |= cbflib.cbf_get_value(self.handle, byref(hdr_type))
-            res |= cbflib.cbf_find_column(self.handle, "header_contents")
-            hdr_contents = c_char_p()
-            res |= cbflib.cbf_get_value(self.handle, byref(hdr_contents))
-            if res == 0 and hdr_type.value != 'XDS special':
-                _logger.debug('miniCBF header type found: %s' % hdr_type.value)
-                info = parser.parse_text(hdr_contents.value, hdr_type.value)
-                header['detector_type'] = info['detector'].lower().strip().replace(' ', '')
-                header['two_theta'] = 0 if not info['two_theta'] else round(info['two_theta'],2)
-                header['pixel_size'] = round(info['pixel_size'][0] * 1000, 5)
-                header['exposure_time'] = info['exposure_time']
-                header['wavelength'] = info['wavelength']
-                header['distance'] = info['distance'] * 1000
-                header['beam_center'] = info['beam_center']
-                header['start_angle'] = info['start_angle']
-                header['delta_angle'] = info['delta_angle']
-                header['saturated_value'] = info['saturated_value']
-                header['sensor_thickness'] = info['sensor_thickness'] * 1000
-            else:
-                _logger.debug('miniCBF with no header')
-        self.header['dataset'] = utils.file_sequences(self.filename)
-        self.header = header
-
-    def read_image(self):
-        num_el = self.header['detector_size'][0] * self.header['detector_size'][1]
-        el_params = DECODER_DICT[self.mime_header.get('X-Binary-Element-Type', 'signed 32-bit integer')]
+    if with_image:
+        num_el = header['detector_size'][0] * header['detector_size'][1]
+        el_params = DECODER_DICT[mime_header.get('X-Binary-Element-Type', 'signed 32-bit integer')]
         el_type = el_params[0]
         el_size = sizeof(el_type)
         data = create_string_buffer(num_el * el_size)
-        res = cbflib.cbf_get_image(self.handle, 0, 0, byref(data), el_size,
-                                   1, self.header['detector_size'][0], self.header['detector_size'][1])
+        res = cbflib.cbf_get_image(handle, 0, 0, byref(data), el_size,
+                                   1, header['detector_size'][0], header['detector_size'][1])
         if res != 0:
             # MiniCBF
-            res = cbflib.cbf_select_datablock(self.handle, c_uint(0))
-            res |= cbflib.cbf_find_category(self.handle, "array_data")
-            res |= cbflib.cbf_find_column(self.handle, "data")
-            binary_id = c_int(self.mime_header.get('X-Binary-ID', 1))
+            res = cbflib.cbf_select_datablock(handle, c_uint(0))
+            res |= cbflib.cbf_find_category(handle, "array_data")
+            res |= cbflib.cbf_find_column(handle, "data")
+            binary_id = c_int(mime_header.get('X-Binary-ID', 1))
             num_el_read = c_size_t()
-            res |= cbflib.cbf_get_integerarray(self.handle, byref(binary_id), byref(data), el_size,
+            res |= cbflib.cbf_get_integerarray(handle, byref(binary_id), byref(data), el_size,
                                                1, c_size_t(num_el), byref(num_el_read))
             if res != 0:
                 _logger.error('MiniCBF Image data error: %s' % (_format_error(res),))
 
-        self.image = Image.frombytes('F', self.header['detector_size'], data, 'raw', el_params[1])
-        self.image = self.image.convert('I')
-        self.data = numpy.fromstring(data, dtype=el_type).reshape(*self.header['detector_size'][::-1]).transpose()
+        image = Image.frombytes('F', header['detector_size'], data, 'raw', el_params[1])
+        image = image.convert('I')
+        data = numpy.fromstring(data, dtype=el_type).reshape(*header['detector_size'][::-1]).transpose()
+    else:
+        data = None
+        image = None
 
+    res |= cbflib.cbf_free_goniometer(goniometer)
+    res |= cbflib.cbf_free_detector(detector)
+    res |= cbflib.cbf_free_handle(handle)
+
+    return header, data, image
+
+
+class CBFDataSet(DataSet):
+    def __init__(self, filename, header_only=False):
+        super(CBFDataSet, self).__init__()
+        self.filename = filename
+        self.header = {}
+        p0 = re.compile('^(?P<root_name>.+)_\d+\.cbf$')
+        m0 = p0.match(self.filename)
+        if m0:
+            params = m0.groupdict()
+            self.root_name = params['root_name']
+        else:
+            self.root_name = filename
+        self.name = os.path.basename(self.root_name)
+        self.current_frame = 1
+        self.raw_header, self.raw_data, self.raw_image = read_cbf(filename, header_only)
+        self.read_header()
+        if not header_only:
+            self.read_image()
+
+    def read_header(self):
+        self.header = {}
+        self.header.update(self.raw_data)
+        self.header.update({
+            'format': 'CBF',
+            'name': self.name,
+            'dataset': utils.file_sequences(self.filename),
+        })
+        if self.header['dataset']:
+            self.current_frame = self.header['dataset']['current']
+
+    def read_image(self):
+        self.image = self.raw_image
+        self.data = self.raw_data
         self.header['average_intensity'] = max(0.0, self.data.mean())
         self.header['min_intensity'], self.header['max_intensity'] = self.data.min(), self.data.max()
         self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
         self.header['overloads'] = len(numpy.where(self.data >= self.header['saturated_value'])[0])
 
-    def __del__(self):
-        res = self._cbflib.cbf_free_handle(self.handle)
-        res |= self._cbflib.cbf_free_goniometer(self.goniometer)
-        res |= self._cbflib.cbf_free_detector(self.detector)
+    def check_disk_frames(self):
+        self.header['dataset'] = utils.file_sequences(self.filename)
+
+    def get_frame(self, index=1):
+        """
+        Load a specific frame
+        :param index: frame index
+        :return:
+        """
+        if self.header['dataset']:
+            tmpl = self.header['dataset']['name'].format(index)
+            filename = tmpl.format(index)
+            if os.path.exists(filename):
+                self.raw_header, self.raw_data, self.raw_image = read_cbf(filename, True)
+                self.read_header()
+                self.read_image()
+                self.current_frame = index
+                return True
+        return False
+
+    def next_frame(self):
+        """Load the next frame in the dataset"""
+        next_frame = self.current_frame + 1
+        return self.get_frame(next_frame)
+
+    def prev_frame(self):
+        """Load the previous frame in the dataset"""
+        next_frame = self.current_frame - 1
+        return self.get_frame(next_frame)
+
 
 __all__ = ['CBFDataSet']
