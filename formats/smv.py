@@ -1,13 +1,10 @@
-'''
-Created on Nov 25, 2010
 
-@author: michel
-'''
 import ctypes
 import re
+import cv2
 import os
 import numpy
-from PIL import Image
+
 from ..import utils
 from . import DataSet
 
@@ -78,23 +75,19 @@ def read_smv(filename, with_image=True):
         info['detector_type'] = 'q315'
     elif info['detector_size'][0] == 3072:
         info['detector_type'] = 'q315-2x'
-    info['filename'] = filename
+    info['filename'] = os.path.basename(filename)
     info['saturated_value'] = 2 ** (8 * ctypes.sizeof(_el_type)) - 1
 
-    if with_image:
-        num_el = info['detector_size'][0] * info['detector_size'][1]
-        el_size = ctypes.sizeof(_el_type)
-        data_size = num_el * el_size
-        with open(filename, 'rb') as myfile:
-            myfile.read(_header_size)
-            data = myfile.read(data_size)
-        raw_image = Image.frombytes('F', info['detector_size'], data, 'raw', _raw_decoder)
-        raw_data = numpy.fromstring(data, dtype=_el_type).reshape(*info['detector_size'])
-    else:
-        raw_data = None
-        raw_image = None
 
-    return info, raw_data, raw_image
+    num_el = info['detector_size'][0] * info['detector_size'][1]
+    el_size = ctypes.sizeof(_el_type)
+    data_size = num_el * el_size
+    with open(filename, 'rb') as myfile:
+        myfile.read(_header_size)
+        data = myfile.read(data_size)
+    raw_data = numpy.fromstring(data, dtype=_el_type).reshape(*info['detector_size'])
+
+    return info, raw_data.T
 
 
 class SMVDataSet(DataSet):
@@ -104,20 +97,11 @@ class SMVDataSet(DataSet):
         self.header = {}
         self.data = None
         self.image = None
-        p0 = re.compile('^(?P<root_name>.+)_\d+\.cbf$')
-        m0 = p0.match(self.filename)
-        if m0:
-            params = m0.groupdict()
-            self.root_name = params['root_name']
-        else:
-            self.root_name = filename
-        self.name = os.path.basename(self.root_name)
 
         self.current_frame = 1
-        self.raw_header, self.raw_data, self.raw_image = read_smv(filename)
+        self.raw_header, self.raw_data = read_smv(filename)
         self.read_header()
-        if not header_only:
-            self.read_image()
+        self.read_image()
 
     def read_header(self):
         self.header = {}
@@ -130,13 +114,10 @@ class SMVDataSet(DataSet):
         if self.header['dataset']:
             self.current_frame = self.header['dataset']['current']
 
-
     def read_image(self):
-        self.data = self.raw_data.T
-        self.image = self.raw_image.convert('I')
-        self.header['average_intensity'] = max(0.0, self.data.mean())
+        self.data = self.raw_data
+        self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.data))
         self.header['min_intensity'], self.header['max_intensity'] = self.data.min(), self.data.max()
-        self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
         self.header['overloads'] = len(numpy.where(self.data >= self.header['saturated_value'])[0])
 
     def check_disk_frames(self):
@@ -154,7 +135,7 @@ class SMVDataSet(DataSet):
                 self.header['dataset']['name'].format(index),
             )
             if os.path.exists(filename):
-                self.raw_header, self.raw_data, self.raw_image = read_smv(filename, True)
+                self.raw_header, self.raw_data = read_smv(filename)
                 self.read_header()
                 self.read_image()
                 self.current_frame = index

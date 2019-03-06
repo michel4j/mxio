@@ -7,9 +7,9 @@ Overview
 import os
 import re
 from ctypes import *
-
+import cv2
 import numpy
-from PIL import Image
+
 from . import DataSet
 from .. import utils, parser
 from ..common import *
@@ -248,8 +248,6 @@ def read_cbf(filename, with_image=True):
     header['two_theta'] = 0.0
     del rot_axis, detector_norm
 
-    header['filename'] = filename
-
     det_id = c_char_p()
     res |= cbflib.cbf_get_detector_id(handle, 0, byref(det_id))
     header['detector_type'] = det_id.value
@@ -282,40 +280,34 @@ def read_cbf(filename, with_image=True):
             header['sensor_thickness'] = info['sensor_thickness'] * 1000
         else:
             _logger.debug('miniCBF with no header')
-    header['dataset'] = utils.file_sequences(filename)
+    header['filename'] = os.path.basename(filename)
 
-    if with_image:
-        num_el = header['detector_size'][0] * header['detector_size'][1]
-        el_params = DECODER_DICT[mime_header.get('X-Binary-Element-Type', 'signed 32-bit integer')]
-        el_type = el_params[0]
-        el_size = sizeof(el_type)
-        data = create_string_buffer(num_el * el_size)
-        res = cbflib.cbf_get_image(handle, 0, 0, byref(data), el_size,
-                                   1, header['detector_size'][0], header['detector_size'][1])
+    num_el = header['detector_size'][0] * header['detector_size'][1]
+    el_params = DECODER_DICT[mime_header.get('X-Binary-Element-Type', 'signed 32-bit integer')]
+    el_type = el_params[0]
+    el_size = sizeof(el_type)
+    data = create_string_buffer(num_el * el_size)
+    res = cbflib.cbf_get_image(handle, 0, 0, byref(data), el_size,
+                               1, header['detector_size'][0], header['detector_size'][1])
+    if res != 0:
+        # MiniCBF
+        res = cbflib.cbf_select_datablock(handle, c_uint(0))
+        res |= cbflib.cbf_find_category(handle, "array_data")
+        res |= cbflib.cbf_find_column(handle, "data")
+        binary_id = c_int(mime_header.get('X-Binary-ID', 1))
+        num_el_read = c_size_t()
+        res |= cbflib.cbf_get_integerarray(handle, byref(binary_id), byref(data), el_size,
+                                           1, c_size_t(num_el), byref(num_el_read))
         if res != 0:
-            # MiniCBF
-            res = cbflib.cbf_select_datablock(handle, c_uint(0))
-            res |= cbflib.cbf_find_category(handle, "array_data")
-            res |= cbflib.cbf_find_column(handle, "data")
-            binary_id = c_int(mime_header.get('X-Binary-ID', 1))
-            num_el_read = c_size_t()
-            res |= cbflib.cbf_get_integerarray(handle, byref(binary_id), byref(data), el_size,
-                                               1, c_size_t(num_el), byref(num_el_read))
-            if res != 0:
-                _logger.error('MiniCBF Image data error: %s' % (_format_error(res),))
+            _logger.error('MiniCBF Image data error: %s' % (_format_error(res),))
 
-        image = Image.frombytes('F', header['detector_size'], data, 'raw', el_params[1])
-        image = image.convert('I')
-        data = numpy.fromstring(data, dtype=el_type).reshape(*header['detector_size'][::-1]).transpose()
-    else:
-        data = None
-        image = None
+    data = numpy.fromstring(data, dtype=el_type).reshape(*header['detector_size'][::-1]).T
 
     res |= cbflib.cbf_free_goniometer(goniometer)
     res |= cbflib.cbf_free_detector(detector)
     res |= cbflib.cbf_free_handle(handle)
 
-    return header, data, image
+    return header, data
 
 
 class CBFDataSet(DataSet):
@@ -332,7 +324,7 @@ class CBFDataSet(DataSet):
             self.root_name = filename
         self.name = os.path.basename(self.root_name)
         self.current_frame = 1
-        self.raw_header, self.raw_data, self.raw_image = read_cbf(filename)
+        self.raw_header, self.raw_data = read_cbf(filename)
         self.read_header()
         if not header_only:
             self.read_image()
@@ -349,7 +341,6 @@ class CBFDataSet(DataSet):
             self.current_frame = self.header['dataset']['current']
 
     def read_image(self):
-        self.image = self.raw_image
         self.data = self.raw_data
         self.header['average_intensity'] = max(0.0, self.data.mean())
         self.header['min_intensity'], self.header['max_intensity'] = self.data.min(), self.data.max()
@@ -371,7 +362,7 @@ class CBFDataSet(DataSet):
                 self.header['dataset']['name'].format(index),
             )
             if os.path.exists(filename):
-                self.raw_header, self.raw_data, self.raw_image = read_cbf(filename, True)
+                self.raw_header, self.raw_data, = read_cbf(filename, True)
                 self.read_header()
                 self.read_image()
                 self.current_frame = index

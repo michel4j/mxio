@@ -3,7 +3,8 @@ import math
 import struct
 import re
 import numpy
-from PIL import Image
+import cv2
+
 from ..import utils
 from . import DataSet
 
@@ -56,21 +57,14 @@ def read_marccd(filename, with_image=True):
     header['saturated_value'] = header_pars[23]
     header['two_theta'] = (goniostat_pars[7] / 1e3) * math.pi / -180.0
     header['detector_size'] = (header_pars[17], header_pars[18])
-    header['filename'] = filename
+    header['filename'] = os.path.basename(filename)
 
     det_mm = int(round(header['pixel_size'] * header['detector_size'][0]))
     header['detector_type'] = 'mar%d' % det_mm
     header['format'] = 'TIFF'
 
-    if with_image:
-        raw_img = Image.open(filename)
-        data = numpy.fromstring(raw_img.tobytes(), 'H').reshape(*header['detector_size']).transpose()
-        image = raw_img.convert('I')
-    else:
-        data = None
-        image = None
-
-    return header, data, image
+    data = cv2.imread(filename, -1)
+    return header, data
 
 
 class MarCCDDataSet(DataSet):
@@ -78,25 +72,15 @@ class MarCCDDataSet(DataSet):
         super(MarCCDDataSet, self).__init__()
         self.filename = filename
         self.header = {}
-        p0 = re.compile('^(?P<root_name>.+)_\d+\.[^.]+$')
-        m0 = p0.match(self.filename)
-        if m0:
-            params = m0.groupdict()
-            self.root_name = params['root_name']
-        else:
-            self.root_name = filename
-        self.name = os.path.basename(self.root_name)
+        self.name = os.path.basename(self.filename)
         self.current_frame = 1
-        self.raw_header, self.raw_data, self.raw_image = read_marccd(filename)
+        self.raw_header, self.raw_data = read_marccd(filename)
         self.read_header()
-        if not header_only:
-            self.read_image()
 
     def read_header(self):
         self.header = {}
         self.header.update(self.raw_header)
         self.header.update({
-            'name': self.name,
             'format': 'TIFF',
             'dataset': utils.file_sequences(self.filename),
         })
@@ -104,11 +88,8 @@ class MarCCDDataSet(DataSet):
             self.current_frame = self.header['dataset']['current']
 
     def read_image(self):
-        self.image = self.raw_image
         self.data = self.raw_data
-        self.header['average_intensity'] = max(0.0, self.data.mean())
-        self.header['min_intensity'], self.header['max_intensity'] = self.data.min(), self.data.max()
-        self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
+        self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.data))
 
     def check_disk_frames(self):
         self.header['dataset'] = utils.file_sequences(self.filename)
@@ -125,7 +106,7 @@ class MarCCDDataSet(DataSet):
                 self.header['dataset']['name'].format(index),
             )
             if os.path.exists(filename):
-                self.raw_header, self.raw_data, self.raw_image = read_marccd(filename, True)
+                self.raw_header, self.raw_data = read_marccd(filename)
                 self.read_header()
                 self.read_image()
                 self.current_frame = index

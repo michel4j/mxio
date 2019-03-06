@@ -1,10 +1,10 @@
 import bitshuffle.h5
 import os
+import cv2
 import re
 import h5py
 import numpy
 
-from PIL import Image
 from ..log import get_module_logger
 from .. import utils
 from . import DataSet
@@ -82,7 +82,7 @@ class HDF5DataSet(DataSet):
         self.header['distance'] *= 1000
         self.header['sensor_thickness'] *= 1000
         self.header['pixel_size'] = 1000*self.header['pixel_size'][0]
-        self.header['filename'] = self.master_file
+        self.header['filename'] = os.path.basename(self.master_file)
         self.header['sections'] = {
             name: (d.attrs['image_nr_low'], d.attrs['image_nr_high']) for name, d in self.raw['/entry/data'].items()
         }
@@ -117,12 +117,10 @@ class HDF5DataSet(DataSet):
         data = section[frame_index]
         valid = self.mask & (data < self.header['saturated_value'])
         self.header['average_intensity'] = data[valid].mean()
+        self.header['std_dev'] = data[valid].std()
         self.header['min_intensity'] = 0
         self.header['max_intensity'] = data[valid].max()
-        self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
         self.header['overloads'] = self.mask.sum() - valid.sum()
-        self.image = Image.fromarray(data)
-        self.image = self.image.convert('I')
         self.data = data.T
 
     def check_disk_sections(self):
