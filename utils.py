@@ -36,17 +36,22 @@ def file_sequences(filename):
     """
 
     directory, filename = os.path.split(os.path.abspath(filename))
-    p1 = re.compile('^(?P<root_name>.+)_(?P<number>\d{3,7})\.?(?P<extension>[\w]+)?$')
+    p1 = re.compile('^(?P<root_name>\w+?)(?P<separator>(?:[._-])?)(?P<field>\d{3,12})(?P<extension>(?:\.[^\d][\w]+)?)$')
+
     m = p1.match(filename)
     if m:
         params = m.groupdict()
         files = os.listdir(directory)
-        width = len(params['number'])
-        current =  int(params['number'])
-        p2 = re.compile('{root_name}_(?P<number>\d{{{width}}}).{extension}'.format(width=width, **params))
+        width = len(params['field'])
+        current =  int(params['field'])
+        p2 = re.compile(
+            '^{root_name}{separator}(\d{{{width}}}){extension}$'.format(
+                width=width, **params
+            )
+        )
         frames = [int(m.group(1)) for f in files for m in [p2.match(f)] if m]
 
-        template = os.path.join(directory, '{root_name}_{{field}}.{extension}'.format(**params))
+        template = os.path.join(directory, '{root_name}{separator}{{field}}{extension}'.format(**params))
         return {
             'name': template.format(field='{{:0{}d}}'.format(width)),
             'template': template.format(field='?'*width),
@@ -54,3 +59,5 @@ def file_sequences(filename):
             'current': current
         }
     return {}
+
+
