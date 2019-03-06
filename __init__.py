@@ -1,13 +1,11 @@
 from __future__ import print_function
-from .formats import marccd, smv, raxis
+from .formats import marccd, smv
 from . import magic
 from .common import *
 
 _image_type_map = {
     'marCCD Area Detector Image' : marccd.MarCCDDataSet,
     'SMV Area Detector Image' : smv.SMVDataSet,
-    'R-Axis Area Detector Image': raxis.RAXISDataSet,
-
 }
 
 try:
@@ -15,7 +13,6 @@ try:
     _image_type_map['CBF Area Detector Image'] = cbf.CBFDataSet
 except FormatNotAvailable:
     pass
-
 
 try:
     from .formats import hdf5

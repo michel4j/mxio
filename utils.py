@@ -44,17 +44,15 @@ def file_sequences(filename):
         files = os.listdir(directory)
         width = len(params['field'])
         current =  int(params['field'])
-        p2 = re.compile(
-            '^{root_name}{separator}(\d{{{width}}}){extension}$'.format(
-                width=width, **params
-            )
-        )
+        regex = '^{root_name}{separator}(\d{{{width}}}){extension}$'.format(width=width, **params)
+        p2 = re.compile(regex)
         frames = [int(m.group(1)) for f in files for m in [p2.match(f)] if m]
 
         template = os.path.join(directory, '{root_name}{separator}{{field}}{extension}'.format(**params))
         return {
             'name': template.format(field='{{:0{}d}}'.format(width)),
             'template': template.format(field='?'*width),
+            'regex': regex,
             'sequence': sorted(frames),
             'current': current
         }

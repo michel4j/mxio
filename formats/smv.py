@@ -149,8 +149,10 @@ class SMVDataSet(DataSet):
         :return:
         """
         if self.header['dataset']:
-            tmpl = self.header['dataset']['name'].format(index)
-            filename = tmpl.format(index)
+            filename = os.path.join(
+                self.header['dataset']['directory'],
+                self.header['dataset']['name'].format(index),
+            )
             if os.path.exists(filename):
                 self.raw_header, self.raw_data, self.raw_image = read_smv(filename, True)
                 self.read_header()
