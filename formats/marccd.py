@@ -75,10 +75,11 @@ class MarCCDDataSet(DataSet):
         self.name = os.path.basename(self.filename)
         self.current_frame = 1
         self.raw_header, self.raw_data = read_marccd(filename)
-        self.read_header()
+        self.read_dataset()
 
-    def read_header(self):
+    def read_dataset(self):
         self.header = {}
+        self.data = self.raw_data
         self.header.update(self.raw_header)
         self.header.update({
             'format': 'TIFF',
@@ -87,8 +88,6 @@ class MarCCDDataSet(DataSet):
         if self.header['dataset']:
             self.current_frame = self.header['dataset']['current']
 
-    def read_image(self):
-        self.data = self.raw_data
         self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.data))
 
     def check_disk_frames(self):

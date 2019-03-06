@@ -5,10 +5,7 @@ class DataSet(object):
         self.header = {}
         self.name = ''
 
-    def read_header(self):
-        raise NotImplementedError('Not implemented!')
-
-    def read_image(self):
+    def read_dataset(self):
         raise NotImplementedError('Not implemented!')
 
     def next_frame(self):

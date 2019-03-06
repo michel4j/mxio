@@ -325,11 +325,9 @@ class CBFDataSet(DataSet):
         self.name = os.path.basename(self.root_name)
         self.current_frame = 1
         self.raw_header, self.raw_data = read_cbf(filename)
-        self.read_header()
-        if not header_only:
-            self.read_image()
+        self.read_dataset()
 
-    def read_header(self):
+    def read_dataset(self):
         self.header = {}
         self.header.update(self.raw_header)
         self.header.update({
@@ -340,7 +338,6 @@ class CBFDataSet(DataSet):
         if self.header['dataset']:
             self.current_frame = self.header['dataset']['current']
 
-    def read_image(self):
         self.data = self.raw_data
         self.header['average_intensity'] = max(0.0, self.data.mean())
         self.header['min_intensity'], self.header['max_intensity'] = self.data.min(), self.data.max()
@@ -363,8 +360,7 @@ class CBFDataSet(DataSet):
             )
             if os.path.exists(filename):
                 self.raw_header, self.raw_data, = read_cbf(filename, True)
-                self.read_header()
-                self.read_image()
+                self.read_dataset()
                 self.current_frame = index
                 return True
         return False

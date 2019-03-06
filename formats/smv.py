@@ -100,10 +100,9 @@ class SMVDataSet(DataSet):
 
         self.current_frame = 1
         self.raw_header, self.raw_data = read_smv(filename)
-        self.read_header()
-        self.read_image()
+        self.read_dataset()
 
-    def read_header(self):
+    def read_dataset(self):
         self.header = {}
         self.header.update(self.raw_header)
         self.header.update({
@@ -114,7 +113,6 @@ class SMVDataSet(DataSet):
         if self.header['dataset']:
             self.current_frame = self.header['dataset']['current']
 
-    def read_image(self):
         self.data = self.raw_data
         self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.data))
         self.header['min_intensity'], self.header['max_intensity'] = self.data.min(), self.data.max()

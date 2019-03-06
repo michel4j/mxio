@@ -61,12 +61,9 @@ class HDF5DataSet(DataSet):
         self.name = os.path.basename(self.root_name)
         self.raw = h5py.File(self.master_file, 'r')
         self.mask = None
-        self.read_header()
+        self.read_dataset()
 
-        if not header_only:
-            self.read_image()
-
-    def read_header(self):
+    def read_dataset(self):
         self.header = {}
         for key, field in HEADER_FIELDS.items():
             try:
@@ -105,6 +102,7 @@ class HDF5DataSet(DataSet):
                 break
 
         self.check_disk_sections()
+        self.read_image()
 
     def read_image(self):
         if self.mask is None:
