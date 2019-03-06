@@ -100,6 +100,7 @@ class HDF5DataSet(DataSet):
             self.header['delta_angle'] = delta_angle
             self.header['total_angle'] = total_angle
             self.header['rotation_axis'] = axis
+            self.header['start_angles'] = start_angles
             if start_angles.mean() != 0.0 and delta_angle*total_angle != 0.0:
                 break
 
@@ -145,6 +146,7 @@ class HDF5DataSet(DataSet):
                 if section_limits[0] <= index <= section_limits[1]:
                     self.current_frame = index
                     self.current_section = section_name
+                    self.header['start_angle'] = self.header['start_angles'][self.current_frame-1]
                     self.read_image()
                     return True
         return False
