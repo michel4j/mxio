@@ -48,9 +48,10 @@ def file_sequences(filename):
         p2 = re.compile(regex)
         frames = [int(m.group(1)) for f in files for m in [p2.match(f)] if m]
 
-        template = os.path.join(directory, '{root_name}{separator}{{field}}{extension}'.format(**params))
+        template = '{root_name}{separator}{{field}}{extension}'.format(**params)
         return {
             'name': template.format(field='{{:0{}d}}'.format(width)),
+            'directory': directory,
             'template': template.format(field='?'*width),
             'regex': regex,
             'sequence': sorted(frames),
