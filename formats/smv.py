@@ -50,7 +50,7 @@ def read_smv(filename, with_image=True):
     info['exposure_time'] = float(tmp_info['time'])
     info['pixel_size'] = float(tmp_info['pixel_size'])
     orgx = float(tmp_info['beam_center_x']) / info['pixel_size']
-    orgy = float(tmp_info['beam_center_x']) / info['pixel_size']
+    orgy = float(tmp_info['beam_center_y']) / info['pixel_size']
     info['detector_size'] = (int(tmp_info['size1']), int(tmp_info['size2']))
     info['beam_center'] = (orgx, info['detector_size'][1] - orgy)
 
@@ -87,7 +87,7 @@ def read_smv(filename, with_image=True):
         data = myfile.read(data_size)
     raw_data = numpy.fromstring(data, dtype=_el_type).reshape(*info['detector_size'])
 
-    return info, raw_data.T
+    return info, raw_data
 
 
 class SMVDataSet(DataSet):
@@ -134,8 +134,7 @@ class SMVDataSet(DataSet):
             )
             if os.path.exists(filename):
                 self.raw_header, self.raw_data = read_smv(filename)
-                self.read_header()
-                self.read_image()
+                self.read_dataset()
                 self.current_frame = index
                 return True
         return False

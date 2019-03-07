@@ -119,7 +119,7 @@ class HDF5DataSet(DataSet):
         self.header['min_intensity'] = 0
         self.header['max_intensity'] = data[valid].max()
         self.header['overloads'] = self.mask.sum() - valid.sum()
-        self.data = data.T
+        self.data = numpy.float64(data)
 
     def check_disk_sections(self):
         self.header['dataset'] = utils.file_sequences(self.root_name + '_' + self.section_names[0] + '.h5')

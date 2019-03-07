@@ -58,5 +58,3 @@ def file_sequences(filename):
             'current': current
         }
     return {}
-
-

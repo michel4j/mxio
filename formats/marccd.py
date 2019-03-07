@@ -87,8 +87,7 @@ class MarCCDDataSet(DataSet):
         })
         if self.header['dataset']:
             self.current_frame = self.header['dataset']['current']
-
-        self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.data))
+        self.header['std_dev'] = self.data.std()
 
     def check_disk_frames(self):
         self.header['dataset'] = utils.file_sequences(self.filename)
@@ -106,8 +105,7 @@ class MarCCDDataSet(DataSet):
             )
             if os.path.exists(filename):
                 self.raw_header, self.raw_data = read_marccd(filename)
-                self.read_header()
-                self.read_image()
+                self.read_dataset()
                 self.current_frame = index
                 return True
         return False
