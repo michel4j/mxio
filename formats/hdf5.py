@@ -80,13 +80,30 @@ class HDF5DataSet(DataSet):
         self.header['sensor_thickness'] *= 1000
         self.header['pixel_size'] = 1000*self.header['pixel_size'][0]
         self.header['filename'] = os.path.basename(self.master_file)
-        self.header['sections'] = {
+        self.sections = {
             name: (d.attrs['image_nr_low'], d.attrs['image_nr_high']) for name, d in self.raw['/entry/data'].items()
         }
-        self.section_names = sorted(self.header['sections'].keys())
+        self.section_names = sorted(self.sections.keys())
         if not self.current_section:
             self.current_section = self.section_names[0]
-        self.current_frame = self.header['sections'][self.current_section][0]
+        self.current_frame = self.sections[self.current_section][0]
+
+        frames = range(1, self.header['num_frames']+1)
+        regex = ''
+        width = 6
+        template = '{root_name}_{{field}}.h5'.format(root_name=self.root_name)
+        regex = '^{root_name}_(\d{{{width}}}).h5$'.format(width=width, root_name=self.root_name)
+
+        current = self.current_frame
+        self.header['dataset'] = {
+            'name': template.format(field='{{:0{}d}}'.format(width)),
+            'label': self.root_name,
+            'directory': self.directory,
+            'template': template.format(field='?' * width),
+            'regex': regex,
+            'sequence': sorted(frames),
+            'current': current
+        }
 
         # try to find oscillation axis and parameters as first non-zero average
         for axis in ['chi', 'kappa', 'omega', 'phi']:
@@ -97,7 +114,7 @@ class HDF5DataSet(DataSet):
             self.header['delta_angle'] = delta_angle
             self.header['total_angle'] = total_angle
             self.header['rotation_axis'] = axis
-            self.header['start_angles'] = start_angles
+            self.start_angles = start_angles
             if start_angles.mean() != 0.0 and delta_angle*total_angle != 0.0:
                 break
 
@@ -111,9 +128,10 @@ class HDF5DataSet(DataSet):
             )
 
         section = self.raw['/entry/data/{}'.format(self.current_section)]
-        frame_index = max(self.current_frame - self.header['sections'][self.current_section][0], 0)
+        frame_index = max(self.current_frame - self.sections[self.current_section][0], 0)
         data = section[frame_index]
         valid = self.mask & (data < self.header['saturated_value'])
+
         self.header['average_intensity'] = data[valid].mean()
         self.header['std_dev'] = data[valid].std()
         self.header['min_intensity'] = 0
@@ -137,12 +155,12 @@ class HDF5DataSet(DataSet):
         :return:
         """
         self.check_disk_sections()
-        for section_name, section_limits in self.header['sections'].items():
+        for section_name, section_limits in self.sections.items():
             if section_name in self.disk_sections:
                 if section_limits[0] <= index <= section_limits[1]:
                     self.current_frame = index
                     self.current_section = section_name
-                    self.header['start_angle'] = self.header['start_angles'][self.current_frame-1]
+                    self.header['start_angle'] = self.start_angles[self.current_frame-1]
                     self.read_image()
                     return True
         return False
@@ -151,7 +169,7 @@ class HDF5DataSet(DataSet):
         """Load the next frame in the dataset"""
         self.check_disk_sections()
         next_frame = self.current_frame + 1
-        section_limits = self.header['sections'][self.current_section]
+        section_limits = self.sections[self.current_section]
         if next_frame <= section_limits[1]:
             self.current_frame = next_frame
         else:
@@ -159,7 +177,7 @@ class HDF5DataSet(DataSet):
             i = self.section_names.index(self.current_section) + 1
             if i <= len(self.section_names)-1:
                 next_section = self.section_names[i]
-                next_frame = self.header['sections'][next_section][0]
+                next_frame = self.sections[next_section][0]
                 if next_section in self.disk_sections:
                     self.current_frame = next_frame
                     self.current_section = next_section
@@ -167,7 +185,7 @@ class HDF5DataSet(DataSet):
                     return False
             else:
                 return False
-        self.header['start_angle'] = self.header['start_angles'][self.current_frame - 1]
+        self.header['start_angle'] = self.start_angles[self.current_frame - 1]
         self.read_image()
         return True
 
@@ -175,7 +193,7 @@ class HDF5DataSet(DataSet):
         """Load the previous frame in the dataset"""
         self.check_disk_sections()
         next_frame = self.current_frame - 1
-        section_limits = self.header['sections'][self.current_section]
+        section_limits = self.sections[self.current_section]
         if next_frame >= section_limits[0]:
             self.current_frame = next_frame
         else:
@@ -183,7 +201,7 @@ class HDF5DataSet(DataSet):
             i = self.section_names.index(self.current_section) - 1
             if i >= 0:
                 next_section = self.section_names[i]
-                next_frame = self.header['sections'][next_section][1]
+                next_frame = self.sections[next_section][1]
                 if next_section in self.disk_sections:
                     self.current_frame = next_frame
                     self.current_section = next_section
@@ -191,7 +209,7 @@ class HDF5DataSet(DataSet):
                     return False
             else:
                 return False
-        self.header['start_angle'] = self.header['start_angles'][self.current_frame - 1]
+        self.header['start_angle'] = self.start_angles[self.current_frame - 1]
         self.read_image()
         return True
 
