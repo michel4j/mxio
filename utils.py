@@ -51,6 +51,7 @@ def file_sequences(filename):
         template = '{root_name}{separator}{{field}}{extension}'.format(**params)
         return {
             'name': template.format(field='{{:0{}d}}'.format(width)),
+            'label': params['root_name'],
             'directory': directory,
             'template': template.format(field='?'*width),
             'regex': regex,
