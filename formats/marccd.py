@@ -112,13 +112,23 @@ class MarCCDDataSet(DataSet):
 
     def next_frame(self):
         """Load the next frame in the dataset"""
-        next_frame = self.current_frame + 1
-        return self.get_frame(next_frame)
+        self.check_disk_frames()
+        if self.header['dataset']:
+            next_pos = self.header['dataset']['sequence'].index(self.current_frame) + 1
+            if next_pos < len(self.header['dataset']['sequence']):
+                next_frame = self.header['dataset']['sequence'][next_pos]
+                return self.get_frame(next_frame)
+        return False
 
     def prev_frame(self):
         """Load the previous frame in the dataset"""
-        next_frame = self.current_frame - 1
-        return self.get_frame(next_frame)
+        self.check_disk_frames()
+        if self.header['dataset']:
+            prev_pos = self.header['dataset']['sequence'].index(self.current_frame) - 1
+            if prev_pos >= 0:
+                prev_frame = self.header['dataset']['sequence'][prev_pos]
+                return self.get_frame(prev_frame)
+        return False
 
 
 
