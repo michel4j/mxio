@@ -49,13 +49,16 @@ def file_sequences(filename):
         frames = [int(m.group(1)) for f in files for m in [p2.match(f)] if m]
 
         template = '{root_name}{separator}{{field}}{extension}'.format(**params)
+        name = template.format(field='{{:0{}d}}'.format(width))
+        sequence = sorted(frames)
         return {
-            'name': template.format(field='{{:0{}d}}'.format(width)),
+            'name': name,
             'label': params['root_name'],
             'directory': directory,
             'template': template.format(field='?'*width),
             'regex': regex,
-            'sequence': sorted(frames),
+            'reference': name.format(sequence[0]),
+            'sequence': sequence,
             'current': current
         }
     return {}

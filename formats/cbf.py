@@ -337,6 +337,11 @@ class CBFDataSet(DataSet):
         })
         if self.header['dataset']:
             self.current_frame = self.header['dataset']['current']
+            self.header['dataset'].update({
+                'start_angle': (
+                    self.header['start_angle'] - self.header['delta_angle'] * ( self.header['dataset']['current'] - 1)
+                )
+            })
 
         self.data = self.raw_data
         self.header['average_intensity'] = max(0.0, self.data.mean())

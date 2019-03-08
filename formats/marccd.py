@@ -87,6 +87,11 @@ class MarCCDDataSet(DataSet):
         })
         if self.header['dataset']:
             self.current_frame = self.header['dataset']['current']
+            self.header['dataset'].update({
+                'start_angle': (
+                    self.header['start_angle'] - self.header['delta_angle'] * (self.header['dataset']['current'] - 1)
+                )
+            })
         self.header['std_dev'] = self.data.std()
 
     def check_disk_frames(self):

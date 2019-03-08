@@ -142,7 +142,9 @@ class HDF5DataSet(DataSet):
                 'label': self.root_name,
                 'directory': self.directory,
                 'template': template.format(field='?' * width),
+                'reference': dataset['reference'],
                 'regex': regex,
+                'start_angle': self.start_angles[0],
                 'sequence': sorted(frames),
                 'current': current
             }
