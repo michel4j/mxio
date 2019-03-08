@@ -61,6 +61,7 @@ class HDF5DataSet(DataSet):
         self.name = os.path.basename(self.root_name)
         self.raw = h5py.File(self.master_file, 'r')
         self.mask = None
+        self.data = None
         self.read_dataset()
 
     def read_dataset(self):
@@ -87,23 +88,6 @@ class HDF5DataSet(DataSet):
         if not self.current_section:
             self.current_section = self.section_names[0]
         self.current_frame = self.sections[self.current_section][0]
-
-        frames = range(1, self.header['num_frames']+1)
-        regex = ''
-        width = 6
-        template = '{root_name}_{{field}}.h5'.format(root_name=self.root_name)
-        regex = '^{root_name}_(\d{{{width}}}).h5$'.format(width=width, root_name=self.root_name)
-
-        current = self.current_frame
-        self.header['dataset'] = {
-            'name': template.format(field='{{:0{}d}}'.format(width)),
-            'label': self.root_name,
-            'directory': self.directory,
-            'template': template.format(field='?' * width),
-            'regex': regex,
-            'sequence': sorted(frames),
-            'current': current
-        }
 
         # try to find oscillation axis and parameters as first non-zero average
         for axis in ['chi', 'kappa', 'omega', 'phi']:
@@ -140,13 +124,30 @@ class HDF5DataSet(DataSet):
         self.data = numpy.float64(data)
 
     def check_disk_sections(self):
-        self.header['dataset'] = utils.file_sequences(self.root_name + '_' + self.section_names[0] + '.h5')
-        if self.header['dataset']:
-            tmpl = self.header['dataset']['name']
+        dataset = utils.file_sequences(self.root_name + '_' + self.section_names[0] + '.h5')
+        if dataset:
+            link_tmpl = dataset['name']
             self.disk_sections = [
                 section_name for i, section_name in enumerate(self.section_names)
-                if os.path.exists(tmpl.format(i+1))
+                if os.path.exists(link_tmpl.format(i+1))
             ]
+            frames = range(1, self.header['num_frames'] + 1)
+            width = 6
+            template = '{root_name}_{{field}}.h5'.format(root_name=self.root_name)
+            regex = '^{root_name}_data_(\d{{{width}}}).h5$'.format(width=width, root_name=self.root_name)
+            current = self.current_frame
+
+            self.header['dataset'] = {
+                'name': template.format(field='{{:0{}d}}'.format(width)),
+                'label': self.root_name,
+                'directory': self.directory,
+                'template': template.format(field='?' * width),
+                'regex': regex,
+                'sequence': sorted(frames),
+                'current': current
+            }
+        else:
+            self.header['dataset'] = {}
 
     def get_frame(self, index=1):
         """
