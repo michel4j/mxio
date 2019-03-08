@@ -267,7 +267,6 @@ def read_cbf(filename, with_image=True):
         if res == 0 and hdr_type.value != 'XDS special':
             _logger.debug('miniCBF header type found: %s' % hdr_type.value)
             info = parser.parse_text(hdr_contents.value, hdr_type.value)
-            print info
             header['detector_type'] = info['detector'].lower().strip().replace(' ', '')
             header['two_theta'] = 0 if not info['two_theta'] else round(info['two_theta'], 2)
             header['pixel_size'] = round(info['pixel_size'][0] * 1000, 5)
@@ -302,7 +301,7 @@ def read_cbf(filename, with_image=True):
         if res != 0:
             _logger.error('MiniCBF Image data error: %s' % (_format_error(res),))
 
-    data = numpy.fromstring(data, dtype=el_type).reshape(*header['detector_size'][::-1]).T
+    data = numpy.fromstring(data, dtype=el_type).reshape(*header['detector_size'][::-1])
 
     res |= cbflib.cbf_free_goniometer(goniometer)
     res |= cbflib.cbf_free_detector(detector)
