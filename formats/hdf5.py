@@ -15,8 +15,7 @@ logger = get_module_logger('imageio')
 HEADER_FIELDS = {
     'detector_type': '/entry/instrument/detector/description',
     'two_theta': '/entry/instrument/detector/goniometer/two_theta_range_average',
-    'pixel_size': ('/entry/instrument/detector/x_pixel_size',
-                   '/entry/instrument/detector/y_pixel_size'),
+    'pixel_size': '/entry/instrument/detector/x_pixel_size',
     'exposure_time': '/entry/instrument/detector/frame_time',
     'wavelength': '/entry/instrument/beam/incident_wavelength',
     'date': '/entry/instrument/detector/detectorSpecific/data_collection_date',
@@ -29,6 +28,19 @@ HEADER_FIELDS = {
     'detector_size': ('/entry/instrument/detector/detectorSpecific/x_pixels_in_detector',
                       '/entry/instrument/detector/detectorSpecific/y_pixels_in_detector'),
 
+}
+CONVERTERS = {
+    'two_theta': float,
+    'pixel_size': lambda v: float(v)*1000,
+    'exposure_time': float,
+    'wavelength': float,
+    'distance': lambda v: float(v)*1000,
+    'beam_center': float,
+    'saturated_value': int,
+    'num_frames': int,
+    'energy': float,
+    'sensor_thickness': lambda v: float(v)*1000,
+    'detector_size': int,
 }
 
 OSCILLATION_FIELDS = '/entry/sample/goniometer/{}'
@@ -67,19 +79,17 @@ class HDF5DataSet(DataSet):
     def read_dataset(self):
         self.header = {}
         for key, field in HEADER_FIELDS.items():
+            converter = CONVERTERS.get(key, lambda v: v)
             try:
                 if not isinstance(field, (tuple, list)):
-                    self.header[key] = self.raw[field].value
+                    self.header[key] = converter(self.raw[field].value)
                 else:
-                    self.header[key] = tuple(self.raw[sub_field].value for sub_field in field)
+                    self.header[key] = tuple(converter(self.raw[sub_field].value) for sub_field in field)
             except ValueError:
                 logger.error('Field corresponding to {} not found!'.format(key))
 
         self.header['name'] = self.name
         self.header['format'] ='HDF5'
-        self.header['distance'] *= 1000
-        self.header['sensor_thickness'] *= 1000
-        self.header['pixel_size'] = 1000*self.header['pixel_size'][0]
         self.header['filename'] = os.path.basename(self.master_file)
         self.sections = {
             name: (d.attrs['image_nr_low'], d.attrs['image_nr_high']) for name, d in self.raw['/entry/data'].items()
