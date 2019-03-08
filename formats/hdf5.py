@@ -126,10 +126,10 @@ class HDF5DataSet(DataSet):
         data = section[frame_index]
         valid = self.mask & (data < self.header['saturated_value'])
 
-        self.header['average_intensity'] = data[valid].mean()
-        self.header['std_dev'] = data[valid].std()
+        self.header['average_intensity'] = float(data[valid].mean())
+        self.header['std_dev'] = float(data[valid].std())
         self.header['min_intensity'] = 0
-        self.header['max_intensity'] = data[valid].max()
+        self.header['max_intensity'] = float(data[valid].max())
         self.header['overloads'] = self.mask.sum() - valid.sum()
         self.data = numpy.float64(data)
 
@@ -154,7 +154,7 @@ class HDF5DataSet(DataSet):
                 'template': template.format(field='?' * width),
                 'reference': dataset['reference'],
                 'regex': regex,
-                'start_angle': self.start_angles[0],
+                'start_angle': float(self.start_angles[0],)
                 'sequence': sorted(frames),
                 'current': current
             }
