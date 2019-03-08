@@ -267,6 +267,7 @@ def read_cbf(filename, with_image=True):
         if res == 0 and hdr_type.value != 'XDS special':
             _logger.debug('miniCBF header type found: %s' % hdr_type.value)
             info = parser.parse_text(hdr_contents.value, hdr_type.value)
+            print info
             header['detector_type'] = info['detector'].lower().strip().replace(' ', '')
             header['two_theta'] = 0 if not info['two_theta'] else round(info['two_theta'], 2)
             header['pixel_size'] = round(info['pixel_size'][0] * 1000, 5)
@@ -344,8 +345,8 @@ class CBFDataSet(DataSet):
             })
 
         self.data = self.raw_data
-        self.header['average_intensity'] = max(0.0, self.data.mean())
-        self.header['min_intensity'], self.header['max_intensity'] = self.data.min(), self.data.max()
+        self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.data))
+        self.header['min_intensity'], self.header['max_intensity'] = 0, self.data.max()
         self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
         self.header['overloads'] = len(numpy.where(self.data >= self.header['saturated_value'])[0])
 
