@@ -1,7 +1,7 @@
-import bitshuffle.h5
 import os
-import cv2
 import re
+
+import hdf5plugin
 import h5py
 import numpy
 
