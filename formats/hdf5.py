@@ -154,7 +154,7 @@ class HDF5DataSet(DataSet):
                 'template': template.format(field='?' * width),
                 'reference': dataset['reference'],
                 'regex': regex,
-                'start_angle': float(self.start_angles[0],)
+                'start_angle': float(self.start_angles[0]),
                 'sequence': sorted(frames),
                 'current': current
             }
