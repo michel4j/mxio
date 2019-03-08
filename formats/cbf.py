@@ -314,15 +314,7 @@ class CBFDataSet(DataSet):
     def __init__(self, filename, header_only=False):
         super(CBFDataSet, self).__init__()
         self.filename = filename
-        self.header = {}
-        p0 = re.compile('^(?P<root_name>.+)_\d+\.cbf$')
-        m0 = p0.match(self.filename)
-        if m0:
-            params = m0.groupdict()
-            self.root_name = params['root_name']
-        else:
-            self.root_name = filename
-        self.name = os.path.basename(self.root_name)
+        self.name = os.path.basename(self.filename)
         self.current_frame = 1
         self.raw_header, self.raw_data = read_cbf(filename)
         self.read_dataset()
@@ -344,8 +336,9 @@ class CBFDataSet(DataSet):
             })
 
         self.data = self.raw_data
-        self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.data))
-        self.header['min_intensity'], self.header['max_intensity'] = 0, self.data.max()
+        mask = self.data < self.header['saturated_value']
+        self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.data[mask]))
+        self.header['min_intensity'], self.header['max_intensity'] = 0, self.data[mask].max()
         self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
         self.header['overloads'] = len(numpy.where(self.data >= self.header['saturated_value'])[0])
 

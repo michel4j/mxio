@@ -119,8 +119,9 @@ class SMVDataSet(DataSet):
             })
 
         self.data = self.raw_data
-        self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.data))
-        self.header['min_intensity'], self.header['max_intensity'] = 0, self.data.max()
+        mask = self.data < self.header['saturated_value']
+        self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.data[mask]))
+        self.header['min_intensity'], self.header['max_intensity'] = 0, self.data[mask].max()
         self.header['overloads'] = len(numpy.where(self.data >= self.header['saturated_value'])[0])
 
     def check_disk_frames(self):
