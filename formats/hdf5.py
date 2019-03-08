@@ -47,30 +47,34 @@ OSCILLATION_FIELDS = '/entry/sample/goniometer/{}'
 
 
 class HDF5DataSet(DataSet):
-    def __init__(self, filename, header_only=False):
+    def __init__(self, path, header_only=False):
         super(HDF5DataSet, self).__init__()
-        self.master_file = filename
-        p0 = re.compile('^(?P<root_name>.+)_master\.h5$')
-        p1 = re.compile('^(?P<root_name>.+)_(?P<section>data_\d+)\.h5')
-        m0 = p0.match(filename)
-        m1 = p1.match(filename)
+        directory, filename = os.path.split(path)
+
+        self.directory = directory
         self.current_section = None
         self.current_frame = 1
         self.disk_sections = []
         self.section_names = []
+
+        p0 = re.compile('^(?P<root_name>.+)_master\.h5$')
+        p1 = re.compile('^(?P<root_name>.+)_(?P<section>data_\d+)\.h5')
+        m0 = p0.match(filename)
+        m1 = p1.match(filename)
+
         if m0:
             params = m0.groupdict()
             self.root_name = params['root_name']
+            self.master_file = os.path.join(self.directory, params['root_name'] + '_master.h5')
         elif m1:
             params = m1.groupdict()
-            self.master_file = params['root_name'] + '_master.h5'
+            self.master_file = os.path.join(self.directory, params['root_name'] + '_master.h5')
             self.root_name = params['root_name']
             self.current_section = params['section']
         else:
-            self.master_file = filename
-            self.root_name = os.path.splitext(self.master_file)[0]
-        self.directory = os.path.dirname(os.path.abspath(self.master_file))
-        self.name = os.path.basename(self.root_name)
+            self.master_file = path
+            self.root_name = os.path.splitext(filename)[0]
+        self.name = self.root_name
         self.raw = h5py.File(self.master_file, 'r')
         self.mask = None
         self.data = None
@@ -134,7 +138,8 @@ class HDF5DataSet(DataSet):
         self.data = numpy.float64(data)
 
     def check_disk_sections(self):
-        dataset = utils.file_sequences(self.root_name + '_' + self.section_names[0] + '.h5')
+        data_file = os.path.join(self.directory, self.root_name + '_' + self.section_names[0] + '.h5')
+        dataset = utils.file_sequences(data_file)
         if dataset:
             link_tmpl = dataset['name']
             self.disk_sections = [
