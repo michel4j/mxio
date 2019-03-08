@@ -198,7 +198,7 @@ class HDF5DataSet(DataSet):
                     return False
             else:
                 return False
-        self.header['start_angle'] = self.start_angles[self.current_frame - 1]
+        self.header['start_angle'] = float(self.start_angles[self.current_frame - 1])
         self.read_image()
         return True
 
