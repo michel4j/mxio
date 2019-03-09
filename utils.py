@@ -36,7 +36,7 @@ def file_sequences(filename):
     """
 
     directory, filename = os.path.split(os.path.abspath(filename))
-    p1 = re.compile('^(?P<root_name>\w+?)(?P<separator>(?:[._-])?)(?P<field>\d{3,12})(?P<extension>(?:\.[^\d][\w]+)?)$')
+    p1 = re.compile('^(?P<root_name>[\w_-]+?)(?P<separator>(?:[._-])?)(?P<field>\d{3,12})(?P<extension>(?:\.[^\d][\w]+)?)$')
 
     m = p1.match(filename)
     if m:

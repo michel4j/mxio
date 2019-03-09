@@ -314,7 +314,7 @@ class CBFDataSet(DataSet):
     def __init__(self, filename, header_only=False):
         super(CBFDataSet, self).__init__()
         self.filename = filename
-        self.name = os.path.basename(self.filename)
+        self.name = os.path.splitext(os.path.basename(self.filename))[0]
         self.current_frame = 1
         self.raw_header, self.raw_data = read_cbf(filename)
         self.read_dataset()
@@ -329,6 +329,7 @@ class CBFDataSet(DataSet):
         })
         if self.header['dataset']:
             self.current_frame = self.header['dataset']['current']
+            self.header['name'] = self.header['dataset']['label']
             self.header['dataset'].update({
                 'start_angle': (
                     self.header['start_angle'] - self.header['delta_angle'] * ( self.header['dataset']['current'] - 1)
@@ -358,9 +359,10 @@ class CBFDataSet(DataSet):
                 self.header['dataset']['name'].format(index),
             )
             if os.path.exists(filename):
+                self.filename = filename
                 self.raw_header, self.raw_data, = read_cbf(filename, True)
-                self.read_dataset()
                 self.current_frame = index
+                self.read_dataset()
                 return True
         return False
 
