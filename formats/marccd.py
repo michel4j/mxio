@@ -94,6 +94,7 @@ class MarCCDDataSet(DataSet):
         })
         self.header['std_dev'] = self.data.std()
         self.header['frame_number'] = self.current_frame
+        self.header['percentiles'] = numpy.percentile(self.data, self.percentiles)
 
     def check_disk_frames(self):
         self.header['dataset'] = utils.file_sequences(self.filename)

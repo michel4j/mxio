@@ -342,6 +342,7 @@ class CBFDataSet(DataSet):
         self.header['min_intensity'], self.header['max_intensity'] = 0, self.data[mask].max()
         self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
         self.header['overloads'] = len(numpy.where(self.data >= self.header['saturated_value'])[0])
+        self.header['percentiles'] = numpy.percentile(self.data[mask], self.percentiles)
         self.header['frame_number'] = self.current_frame
 
     def check_disk_frames(self):

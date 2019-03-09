@@ -4,6 +4,7 @@ class DataSet(object):
     def __init__(self):
         self.header = {}
         self.name = ''
+        self.percentiles = (50., 98.)
 
     def read_dataset(self):
         raise NotImplementedError('Not implemented!')
