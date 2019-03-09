@@ -135,6 +135,7 @@ class HDF5DataSet(DataSet):
         self.header['min_intensity'] = 0
         self.header['max_intensity'] = float(data[valid].max())
         self.header['overloads'] = self.mask.sum() - valid.sum()
+        self.header['frame_number'] = self.current_frame
         self.data = numpy.float64(data)
 
     def check_disk_sections(self):
