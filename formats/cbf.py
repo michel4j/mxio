@@ -1,13 +1,8 @@
-"""
-Overview
-========
-
-    This module provides an object oriented interface to CBFlib.
-"""
 import os
 import re
 from ctypes import *
 import cv2
+import time
 import numpy
 
 from . import DataSet
@@ -16,7 +11,7 @@ from ..common import *
 from ..log import get_module_logger
 
 # Configure Logging
-_logger = get_module_logger('imageio')
+logger = get_module_logger('imageio')
 
 # Define CBF Error Code constants
 CBF_FORMAT = 0x00000001  # 1
@@ -94,13 +89,13 @@ def _format_error(code):
 try:
     cbflib = cdll.LoadLibrary('libcbf.so.0')
 except:
-    _logger.error("CBF shared library 'libcbf.so' could not be loaded!")
+    logger.error("CBF shared library 'libcbf.so' could not be loaded!")
     raise FormatNotAvailable
 
 try:
     libc = cdll.LoadLibrary('libc.so.6')
 except:
-    _logger.error("C runtime library 'libc.so.6' could not be loaded!")
+    logger.error("C runtime library 'libc.so.6' could not be loaded!")
     raise FormatNotAvailable
 
 # define argument and return types
@@ -265,7 +260,7 @@ def read_cbf(filename, with_image=True):
         hdr_contents = c_char_p()
         res |= cbflib.cbf_get_value(handle, byref(hdr_contents))
         if res == 0 and hdr_type.value != 'XDS special':
-            _logger.debug('miniCBF header type found: %s' % hdr_type.value)
+            logger.debug('miniCBF header type found: %s' % hdr_type.value)
             info = parser.parse_text(hdr_contents.value, hdr_type.value)
             header['detector_type'] = info['detector'].lower().strip().replace(' ', '')
             header['two_theta'] = 0 if not info['two_theta'] else round(info['two_theta'], 2)
@@ -279,7 +274,7 @@ def read_cbf(filename, with_image=True):
             header['saturated_value'] = info['saturated_value']
             header['sensor_thickness'] = info['sensor_thickness'] * 1000
         else:
-            _logger.debug('miniCBF with no header')
+            logger.debug('miniCBF with no header')
     header['filename'] = os.path.basename(filename)
 
     num_el = header['detector_size'][0] * header['detector_size'][1]
@@ -299,7 +294,7 @@ def read_cbf(filename, with_image=True):
         res |= cbflib.cbf_get_integerarray(handle, byref(binary_id), byref(data), el_size,
                                            1, c_size_t(num_el), byref(num_el_read))
         if res != 0:
-            _logger.error('MiniCBF Image data error: %s' % (_format_error(res),))
+            logger.error('MiniCBF Image data error: %s' % (_format_error(res),))
 
     data = numpy.fromstring(data, dtype=el_type).reshape(*header['detector_size'][::-1])
 
@@ -336,13 +331,15 @@ class CBFDataSet(DataSet):
                 )
             })
 
-        self.data = self.raw_data
-        mask = self.data < self.header['saturated_value']
-        self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.data[mask]))
-        self.header['min_intensity'], self.header['max_intensity'] = 0, self.data[mask].max()
-        self.header['gamma'] = utils.calc_gamma(self.header['average_intensity'])
-        self.header['overloads'] = len(numpy.where(self.data >= self.header['saturated_value'])[0])
-        self.header['percentiles'] = numpy.percentile(self.data[mask], self.percentiles)
+        self.data = self.raw_data.view(numpy.int32)
+        stats_subset = self.data[:self.data.shape[0] // 2, :self.data.shape[1] // 2]
+        valid = (stats_subset > 0) & (stats_subset <= self.header['saturated_value'])
+        self.stats_data = stats_subset[valid]
+
+        self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.stats_data))
+        self.header['min_intensity'] = self.stats_data.min()
+        self.header['max_intensity'] = self.stats_data.max()
+        self.header['overloads'] = 4*(self.stats_data == self.header['saturated_value']).sum()
         self.header['frame_number'] = self.current_frame
 
     def check_disk_frames(self):

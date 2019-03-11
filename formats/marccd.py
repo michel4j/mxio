@@ -3,10 +3,15 @@ import math
 import struct
 import re
 import numpy
+import time
 import cv2
 
 from ..import utils
 from . import DataSet
+from ..log import get_module_logger
+
+# Configure Logging
+logger = get_module_logger('imageio')
 
 
 def read_marccd(filename, with_image=True):
@@ -79,7 +84,6 @@ class MarCCDDataSet(DataSet):
 
     def read_dataset(self):
         self.header = {}
-        self.data = self.raw_data
         self.header.update(self.raw_header)
         self.header.update({
             'format': 'TIFF',
@@ -92,9 +96,13 @@ class MarCCDDataSet(DataSet):
                     self.header['start_angle'] - self.header['delta_angle'] * (self.header['dataset']['current'] - 1)
             )
         })
-        self.header['std_dev'] = self.data.std()
+        self.data = self.raw_data
+        stats_subset = self.data[:self.data.shape[0] // 2, :self.data.shape[1] // 2]
+        valid = (stats_subset > 0) & (stats_subset <= self.header['saturated_value'])
+        self.stats_data = stats_subset[valid]
+        self.header['std_dev'] = self.stats_data.std()
         self.header['frame_number'] = self.current_frame
-        self.header['percentiles'] = numpy.percentile(self.data, self.percentiles)
+
 
     def check_disk_frames(self):
         self.header['dataset'] = utils.file_sequences(self.filename)

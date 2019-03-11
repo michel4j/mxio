@@ -62,3 +62,7 @@ def file_sequences(filename):
             'current': current
         }
     return {}
+
+
+def image_histogram(data):
+    hist, edges = numpy.histogram(data, density=False)

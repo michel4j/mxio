@@ -7,6 +7,10 @@ import numpy
 
 from ..import utils
 from . import DataSet
+from ..log import get_module_logger
+
+# Configure Logging
+logger = get_module_logger('imageio')
 
 DECODER_DICT = {
     "unsigned_short": (ctypes.c_uint16, 'F;16','F;16B'),
@@ -120,12 +124,15 @@ class SMVDataSet(DataSet):
             })
 
         self.data = self.raw_data
-        mask = self.data < self.header['saturated_value']
-        self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.data[mask]))
-        self.header['min_intensity'], self.header['max_intensity'] = 0, self.data[mask].max()
-        self.header['overloads'] = len(numpy.where(self.data >= self.header['saturated_value'])[0])
+        stats_subset = self.data[:self.data.shape[0] // 2, :self.data.shape[1] // 2]
+        valid = (stats_subset > 0) & (stats_subset <= self.header['saturated_value'])
+        self.stats_data = stats_subset[valid]
+
+        self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.stats_data))
+        self.header['min_intensity'] = self.stats_data.min()
+        self.header['max_intensity'] = self.stats_data.max()
+        self.header['overloads'] = 4*(self.stats_data == self.header['saturated_value']).sum()
         self.header['frame_number'] = self.current_frame
-        self.header['percentiles'] = numpy.percentile(self.data[mask], self.percentiles)
 
     def check_disk_frames(self):
         self.header['dataset'] = utils.file_sequences(self.filename)

@@ -1,6 +1,7 @@
 import os
 import re
-
+import time
+import cv2
 import hdf5plugin
 import h5py
 import numpy
@@ -122,22 +123,24 @@ class HDF5DataSet(DataSet):
     def read_image(self):
         if self.mask is None:
             self.mask = numpy.invert(
-                self.raw['/entry/instrument/detector/detectorSpecific/pixel_mask'][()].astype(bool)
+                self.raw['/entry/instrument/detector/detectorSpecific/pixel_mask'][()].view(bool)
             )
 
         section = self.raw['/entry/data/{}'.format(self.current_section)]
         frame_index = max(self.current_frame - self.sections[self.current_section][0], 0)
-        data = section[frame_index]
-        valid = self.mask & (data < self.header['saturated_value'])
+        data = section[frame_index].view(numpy.int32)
 
-        self.header['average_intensity'] = float(data[valid].mean())
-        self.header['std_dev'] = float(data[valid].std())
+        # use a  quater of the image as a subset of data or fast analysis
+        stats_subset =  data[:data.shape[0]//2,:data.shape[1]//2]
+        valid = self.mask[:data.shape[0]//2,:data.shape[1]//2]
+        self.stats_data = stats_subset[valid]
+
+        self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.stats_data))
         self.header['min_intensity'] = 0
-        self.header['max_intensity'] = float(data[valid].max())
-        self.header['overloads'] = self.mask.sum() - valid.sum()
+        self.header['max_intensity'] = float(self.stats_data.max()) # Estimate
+        self.header['overloads'] = 4*(self.stats_data == self.header['saturated_value']).sum() # Fast estimate
         self.header['frame_number'] = self.current_frame
-        self.header['percentiles'] = numpy.percentile(data[valid], self.percentiles)
-        self.data = numpy.float64(data)
+        self.data = data
 
     def check_disk_sections(self):
         data_file = os.path.join(self.directory, self.root_name + '_' + self.section_names[0] + '.h5')
