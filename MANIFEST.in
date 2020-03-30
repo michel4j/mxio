@@ -1,2 +1,3 @@
 include README.md
+include mxio/data/magic
 include mxio/data/*.*
