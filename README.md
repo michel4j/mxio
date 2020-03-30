@@ -1,2 +1,3 @@
-# imageio
-Diffraction Image IO Library
+MXIO
+====
+MX Diffraction Image IO Library
