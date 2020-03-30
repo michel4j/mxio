@@ -2,9 +2,13 @@
 # Lines that start with '#' are comments.
 *.py[oc]
 *~
-.settings
 *.bak
-dpm/VERSION
 .idea/
 *.tar
 *.gz
+*.egg*/
+/venv/
+/build/
+/dist
+/*.egg-info
+/*.egg
