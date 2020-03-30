@@ -9,6 +9,8 @@ _image_type_map = {
     'SMV Area Detector Image': smv.SMVDataSet,
 }
 
+MAGIC_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'magic')
+
 try:
     from .formats import cbf
 
@@ -25,7 +27,11 @@ except FormatNotAvailable:
 
 
 def get_file_type(filename):
-    m = magic.Magic(magic_file=os.path.join(os.path.dirname(__file__), 'data', 'magic'))
+    try:
+        m = magic.Magic(magic_file=MAGIC_FILE)
+    except magic.MagicException:
+        print('Magic file not found')
+        m = magic.Magic()
     return m.from_file(filename).strip()
 
 
