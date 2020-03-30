@@ -1,0 +1,7 @@
+hdf5plugin
+h5py
+opencv-python
+python-magic
+pytz
+pyyaml
+numpy

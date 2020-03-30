@@ -1,8 +1,9 @@
 import os
 import re
+import pytz
+from datetime import datetime
 
 import numpy
-from scipy import interpolate
 
 
 def stretch(gamma):
@@ -13,15 +14,6 @@ def stretch(gamma):
 
 def calc_gamma(avg_int):
     return 2.7 if avg_int == 0.0 else 29.378 * avg_int ** -0.86
-
-
-def interp_array(a, size=25):
-    x, y = numpy.mgrid[-1:1:9j, -1:1:9j]
-    z = a
-    xnew, ynew = numpy.mgrid[-1:1:size * 1j, -1:1:size * 1j]
-    tck = interpolate.bisplrep(x, y, z, s=0)
-    znew = interpolate.bisplev(xnew[:, 0], ynew[0, :], tck)
-    return znew
 
 
 def file_sequences(filename):
@@ -51,7 +43,9 @@ def file_sequences(filename):
         template = '{root_name}{separator}{{field}}{extension}'.format(**params)
         name = template.format(field='{{:0{}d}}'.format(width))
         sequence = sorted(frames)
+        first_file = name.format(sequence[0])
         return {
+            'start_time': datetime.fromtimestamp(os.path.getmtime(os.path.join(directory, first_file)), tz=pytz.utc),
             'name': name,
             'label': params['root_name'],
             'directory': directory,

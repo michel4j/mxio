@@ -4,7 +4,7 @@ from collections import defaultdict
 
 import yaml
 
-SPEC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'specs')
+SPEC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 ESCAPE_CHARS = ")("
 
 
@@ -29,8 +29,10 @@ class ConverterType(type):
         return self.registry
 
 
-class Converter(object):
-    __metaclass__ = ConverterType
+class Converter(object, metaclass=ConverterType):
+    """
+    Converter Base Class
+    """
 
 
 class Int(Converter):
@@ -78,12 +80,12 @@ def escape(text):
 def build(pattern):
     """
     Parse the text and generate the corresponding regex expression, replacing all fields
-    @param pattern: parser specification
+    :param pattern: parser specification
     @return:
     """
 
-    field_pattern = re.compile('^(?P<type>\w+):(?P<name>\w+)(?::(?P<regex>\(.*?\)))?(?::(?P<size>\d+))?$')
-    tokens = re.findall('<([^<>]+?)>', pattern)
+    field_pattern = re.compile(r'^(?P<type>\w+):(?P<name>\w+)(?::(?P<regex>\(.*?\)))?(?::(?P<size>\d+))?$')
+    tokens = re.findall(r'<([^<>]+?)>', pattern)
     counts = defaultdict(int)
     variables = []
 
@@ -159,7 +161,7 @@ def parse_section(section, data):
 def parse_text(data, spec_name):
     spec_file = '{}.yml'.format(spec_name)
     with open(os.path.join(SPEC_PATH, spec_file), 'r') as handle:
-        specs = yaml.load(handle)
+        specs = yaml.safe_load(handle)
     return parse_section(specs['root'], data)
 
 

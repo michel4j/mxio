@@ -1,9 +1,6 @@
 import os
 import math
 import struct
-import re
-import numpy
-import time
 import cv2
 
 from ..import utils
@@ -96,6 +93,7 @@ class MarCCDDataSet(DataSet):
                     self.header['start_angle'] - self.header['delta_angle'] * (self.header['dataset']['current'] - 1)
             )
         })
+
         self.data = self.raw_data
         stats_subset = self.data[:self.data.shape[0] // 2, :self.data.shape[1] // 2]
         valid = (stats_subset > 0) & (stats_subset <= self.header['saturated_value'])

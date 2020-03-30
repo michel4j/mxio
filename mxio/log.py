@@ -1,6 +1,5 @@
 """This module implements utility classes and functions for logging."""
 
-from twisted.python import log
 import logging
 
 LOG_LEVEL = logging.INFO
@@ -68,18 +67,6 @@ class ColoredConsoleHandler(logging.StreamHandler):
             self.handleError(record)
 
 
-class TwistedLogHandler(logging.StreamHandler):
-    def emit(self, record):
-        msg = self.format(record)
-        if record.levelno == logging.WARNING:
-            log.msg(msg)
-        elif record.levelno > logging.WARNING:
-            log.err(msg)
-        else:
-            log.msg(msg)
-        self.flush()
-
-
 def get_module_logger(name):
     """A factory which creates loggers with the given name and returns it."""
     name = name.split('.')[-1]
@@ -95,16 +82,6 @@ def log_to_console(level=LOG_LEVEL):
     console = ColoredConsoleHandler()
     console.setLevel(level)
     formatter = logging.Formatter('%(asctime)s [%(name)s] %(message)s', '%b/%d %H:%M:%S')
-    console.setFormatter(formatter)
-    logging.getLogger('').addHandler(console)
-
-
-def log_to_twisted(level=LOG_LEVEL):
-    """Add a log handler which logs to the twisted logger."""
-
-    console = TwistedLogHandler()
-    console.setLevel(level)
-    formatter = logging.Formatter('%(message)s')
     console.setFormatter(formatter)
     logging.getLogger('').addHandler(console)
 

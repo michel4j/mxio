@@ -1,11 +1,13 @@
 import os
 import re
-import time
 import cv2
+import itertools
 import hdf5plugin
 import h5py
+import pytz
 import numpy
 
+from datetime import datetime
 from ..log import get_module_logger
 from .. import utils
 from . import DataSet
@@ -23,7 +25,7 @@ HEADER_FIELDS = {
     'distance': '/entry/instrument/detector/detector_distance',
     'beam_center': ('/entry/instrument/detector/beam_center_x', '/entry/instrument/detector/beam_center_y'),
     'saturated_value': '/entry/instrument/detector/detectorSpecific/countrate_correction_count_cutoff',
-    'num_frames': '/entry/instrument/detector/detectorSpecific/nimages',
+    #'num_frames': '/entry/instrument/detector/detectorSpecific/nimages',
     'energy': '/entry/instrument/detector/detectorSpecific/photon_energy',
     'sensor_thickness': '/entry/instrument/detector/sensor_thickness',
     'detector_size': ('/entry/instrument/detector/detectorSpecific/x_pixels_in_detector',
@@ -31,6 +33,8 @@ HEADER_FIELDS = {
 
 }
 CONVERTERS = {
+    'detector_type': lambda v: v.decode('utf-8'),
+    'date': lambda v: datetime.fromisoformat(v.decode('utf-8')),
     'two_theta': float,
     'pixel_size': lambda v: float(v)*1000,
     'exposure_time': float,
@@ -45,6 +49,10 @@ CONVERTERS = {
 }
 
 OSCILLATION_FIELDS = '/entry/sample/goniometer/{}'
+NUMBER_FORMATS = {
+    'uint16': numpy.int16,
+    'uint32': numpy.int32,
+}
 
 
 class HDF5DataSet(DataSet):
@@ -87,18 +95,19 @@ class HDF5DataSet(DataSet):
             converter = CONVERTERS.get(key, lambda v: v)
             try:
                 if not isinstance(field, (tuple, list)):
-                    self.header[key] = converter(self.raw[field].value)
+                    self.header[key] = converter(self.raw[field][()])
                 else:
-                    self.header[key] = tuple(converter(self.raw[sub_field].value) for sub_field in field)
+                    self.header[key] = tuple(converter(self.raw[sub_field][()]) for sub_field in field)
             except ValueError:
                 logger.error('Field corresponding to {} not found!'.format(key))
 
         self.header['name'] = self.name
-        self.header['format'] ='HDF5'
+        self.header['format'] = 'HDF5'
         self.header['filename'] = os.path.basename(self.master_file)
         self.sections = {
             name: (d.attrs['image_nr_low'], d.attrs['image_nr_high']) for name, d in self.raw['/entry/data'].items()
         }
+
         self.section_names = sorted(self.sections.keys())
         if not self.current_section:
             self.current_section = self.section_names[0]
@@ -106,9 +115,9 @@ class HDF5DataSet(DataSet):
 
         # try to find oscillation axis and parameters as first non-zero average
         for axis in ['chi', 'kappa', 'omega', 'phi']:
-            start_angles = self.raw[OSCILLATION_FIELDS.format(axis)].value
-            delta_angle = self.raw[OSCILLATION_FIELDS.format(axis + '_range_average')].value
-            total_angle = self.raw[OSCILLATION_FIELDS.format(axis + '_range_total')].value
+            start_angles = self.raw[OSCILLATION_FIELDS.format(axis)][()]
+            delta_angle = self.raw[OSCILLATION_FIELDS.format(axis + '_range_average')][()]
+            total_angle = self.raw[OSCILLATION_FIELDS.format(axis + '_range_total')][()]
             self.header['start_angle'] = start_angles[0]
             self.header['delta_angle'] = delta_angle
             self.header['total_angle'] = total_angle
@@ -128,17 +137,19 @@ class HDF5DataSet(DataSet):
 
         section = self.raw['/entry/data/{}'.format(self.current_section)]
         frame_index = max(self.current_frame - self.sections[self.current_section][0], 0)
-        data = section[frame_index].view(numpy.int32)
+        raw_data = section[frame_index]
+        data_type = NUMBER_FORMATS[str(raw_data.dtype)]
+        data = raw_data.view(data_type)
 
-        # use a  quater of the image as a subset of data or fast analysis
-        stats_subset =  data[:data.shape[0]//2,:data.shape[1]//2]
-        valid = self.mask[:data.shape[0]//2,:data.shape[1]//2]
+        # use a  quarter of the image as a subset of data or fast analysis
+        stats_subset = data[:data.shape[0]//2, :data.shape[1]//2]
+        valid = self.mask[:data.shape[0]//2, :data.shape[1]//2]
         self.stats_data = stats_subset[valid]
 
         self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.stats_data))
         self.header['min_intensity'] = 0
-        self.header['max_intensity'] = float(self.stats_data.max()) # Estimate
-        self.header['overloads'] = 4*(self.stats_data == self.header['saturated_value']).sum() # Fast estimate
+        self.header['max_intensity'] = float(self.stats_data.max())  # Estimate
+        self.header['overloads'] = 4*(self.stats_data == self.header['saturated_value']).sum()  # Fast estimate
         self.header['frame_number'] = self.current_frame
         self.data = data
 
@@ -147,25 +158,27 @@ class HDF5DataSet(DataSet):
         dataset = utils.file_sequences(data_file)
         if dataset:
             link_tmpl = dataset['name']
-            self.disk_sections = [
-                section_name for i, section_name in enumerate(self.section_names)
-                if os.path.exists(link_tmpl.format(i+1))
-            ]
-            frames = range(1, self.header['num_frames'] + 1)
+            self.disk_sections = {
+                section_name: images
+                for i, (section_name, images) in enumerate(self.sections.items())
+                if os.path.exists(os.path.join(self.directory, link_tmpl.format(i+1)))
+            }
+            frames = list(itertools.chain.from_iterable(range(v[0], v[1] + 1) for v in self.disk_sections.values()))
             width = 6
             template = '{root_name}_{{field}}.h5'.format(root_name=self.root_name)
-            regex = '^{root_name}_data_(\d{{{width}}}).h5$'.format(width=width, root_name=self.root_name)
+            regex = r'^{root_name}_data_(\d{{{width}}}).h5$'.format(width=width, root_name=self.root_name)
             current = self.current_frame
 
             self.header['dataset'] = {
-                'name': template.format(field='{{:0{}d}}'.format(width)),
+                'name': '{root_name}_master.h5'.format(root_name=self.root_name),
+                'start_time': self.header['date'].replace(tzinfo=pytz.utc),
                 'label': self.root_name,
                 'directory': self.directory,
                 'template': template.format(field='?' * width),
                 'reference': dataset['reference'],
                 'regex': regex,
                 'start_angle': float(self.start_angles[0]),
-                'sequence': sorted(frames),
+                'sequence': frames,
                 'current': current
             }
         else:

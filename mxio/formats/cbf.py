@@ -2,7 +2,6 @@ import os
 import re
 from ctypes import *
 import cv2
-import time
 import numpy
 
 from . import DataSet
@@ -143,7 +142,7 @@ def get_max_int(t):
     v = t(2 ** (8 * sizeof(t)) - 1).value
     if v == -1:  # signed
         return c_double(2 ** (8 * sizeof(t) - 1) - 1)
-    else:  # unsiged
+    else:  # unsigned
         return c_double(2 ** (8 * sizeof(t) - 1))
 
 
@@ -154,14 +153,14 @@ def read_cbf(filename, with_image=True):
 
     # make the handle and read the file
     res = cbflib.cbf_make_handle(byref(handle))
-    fp = libc.fopen(filename, "rb")
+    fp = libc.fopen(filename.encode('utf-8'), b"rb")
     res |= cbflib.cbf_read_template(handle, fp)
     res |= cbflib.cbf_construct_goniometer(handle, byref(goniometer))
     res |= cbflib.cbf_require_reference_detector(handle, byref(detector), 0)
 
     # read mime
-    hr = re.compile('^(.+):\s+(.+)$')
-    bin_st = re.compile('^--CIF-BINARY-FORMAT-SECTION--')
+    hr = re.compile(r'^(.+):\s+(.+)$')
+    bin_st = re.compile(r'^--CIF-BINARY-FORMAT-SECTION--')
     mime_header = {}
     parse_tokens = {
         "Content-Type": str,
@@ -175,27 +174,31 @@ def read_cbf(filename, with_image=True):
         "X-Binary-Size-Fastest-Dimension": int,
         "X-Binary-Size-Second-Dimension": int,
         "X-Binary-Size-Third-Dimension": int,
-        "X-Binary-Size-Padding": int}
+        "X-Binary-Size-Padding": int
+    }
 
-    with open(filename) as fh:
+    with open(filename, 'rb') as fh:
         # find start of binary header
         i = 0
-        while not bin_st.match(fh.readline()) and i < 512:
+        bin_found = False
+        while not bin_found and i < 512:
+            line = fh.readline().decode()
+            bin_found = bin_st.match(line)
             i += 1
 
         if i >= 512:
             return mime_header
 
         # extract binary header
-        l = fh.readline()
-        while l.strip() != '':
-            m = hr.match(l)
+        line = fh.readline().decode()
+        while line.strip() != '':
+            m = hr.match(line)
             if m:
                 mime_header[m.group(1)] = parse_tokens[m.group(1)](m.group(2).replace('"', '').strip())
-            l = fh.readline()
+            line = fh.readline().decode()
 
     # read header
-    header  = {}
+    header = {}
     wvl = c_double(1.0)
     res = cbflib.cbf_get_wavelength(handle, byref(wvl))
     header['wavelength'] = wvl.value
@@ -231,37 +234,36 @@ def read_cbf(filename, with_image=True):
     res |= cbflib.cbf_get_overload(handle, 0, byref(ovl))
     header['saturated_value'] = ovl.value
 
-    nx, ny, nz = c_double(0.0), c_double(0.0), c_double(0.0)
-    res |= cbflib.cbf_get_detector_normal(detector, byref(nx), byref(ny), byref(nx))
-    detector_norm = numpy.array([nx.value, ny.value, nz.value])
-
-    nx, ny, nz = c_double(0.0), c_double(0.0), c_double(0.0)
-    res |= cbflib.cbf_get_rotation_axis(goniometer, 0, byref(nx), byref(ny), byref(nx))
-    rot_axis = numpy.array([nx.value, ny.value, nz.value])
-
     # FIXME Calculate actual two_theta from the beam direction and detector normal
+    vx, vy, vz = c_double(0.0), c_double(0.0), c_double(0.0)
+    res |= cbflib.cbf_get_detector_normal(detector, byref(vx), byref(vy), byref(vx))
+    detector_norm = numpy.array([vx.value, vy.value, vz.value])
+
+    res |= cbflib.cbf_get_rotation_axis(goniometer, 0, byref(vx), byref(vy), byref(vx))
+    rot_axis = numpy.array([vx.value, vy.value, vz.value])
+
     header['two_theta'] = 0.0
-    del rot_axis, detector_norm
 
     det_id = c_char_p()
     res |= cbflib.cbf_get_detector_id(handle, 0, byref(det_id))
     header['detector_type'] = det_id.value
-    if header['detector_type'] == None:
+    if header['detector_type'] is None:
         header['detector_type'] = 'Unknown'
     header['format'] = 'CBF'
 
+    # handle XDS Special cbf files
     if header['distance'] == 999.0 and header['delta_angle'] == 0.0 and header['exposure_time'] == 0.0:
         res = cbflib.cbf_select_datablock(handle, c_uint(0))
-        res |= cbflib.cbf_find_category(handle, "array_data")
-        res |= cbflib.cbf_find_column(handle, "header_convention")
+        res |= cbflib.cbf_find_category(handle, b"array_data")
+        res |= cbflib.cbf_find_column(handle, b"header_convention")
         hdr_type = c_char_p()
         res |= cbflib.cbf_get_value(handle, byref(hdr_type))
-        res |= cbflib.cbf_find_column(handle, "header_contents")
+        res |= cbflib.cbf_find_column(handle, b"header_contents")
         hdr_contents = c_char_p()
         res |= cbflib.cbf_get_value(handle, byref(hdr_contents))
         if res == 0 and hdr_type.value != 'XDS special':
-            logger.debug('miniCBF header type found: %s' % hdr_type.value)
-            info = parser.parse_text(hdr_contents.value, hdr_type.value)
+            logger.debug('miniCBF header type found: {}'.format(hdr_type.value))
+            info = parser.parse_text((hdr_contents.value).decode(), (hdr_type.value).decode())
             header['detector_type'] = info['detector'].lower().strip().replace(' ', '')
             header['two_theta'] = 0 if not info['two_theta'] else round(info['two_theta'], 2)
             header['pixel_size'] = round(info['pixel_size'][0] * 1000, 5)
@@ -282,17 +284,19 @@ def read_cbf(filename, with_image=True):
     el_type = el_params[0]
     el_size = sizeof(el_type)
     data = create_string_buffer(num_el * el_size)
-    res = cbflib.cbf_get_image(handle, 0, 0, byref(data), el_size,
-                               1, header['detector_size'][0], header['detector_size'][1])
+    res = cbflib.cbf_get_image(
+        handle, 0, 0, byref(data), el_size, 1, header['detector_size'][0], header['detector_size'][1]
+    )
     if res != 0:
         # MiniCBF
         res = cbflib.cbf_select_datablock(handle, c_uint(0))
-        res |= cbflib.cbf_find_category(handle, "array_data")
-        res |= cbflib.cbf_find_column(handle, "data")
+        res |= cbflib.cbf_find_category(handle, b"array_data")
+        res |= cbflib.cbf_find_column(handle, b"data")
         binary_id = c_int(mime_header.get('X-Binary-ID', 1))
         num_el_read = c_size_t()
-        res |= cbflib.cbf_get_integerarray(handle, byref(binary_id), byref(data), el_size,
-                                           1, c_size_t(num_el), byref(num_el_read))
+        res |= cbflib.cbf_get_integerarray(
+            handle, byref(binary_id), byref(data), el_size, 1, c_size_t(num_el), byref(num_el_read)
+        )
         if res != 0:
             logger.error('MiniCBF Image data error: %s' % (_format_error(res),))
 
@@ -322,12 +326,14 @@ class CBFDataSet(DataSet):
             'name': self.name,
             'dataset': utils.file_sequences(self.filename),
         })
+
         if self.header['dataset']:
             self.current_frame = self.header['dataset']['current']
             self.header['name'] = self.header['dataset']['label']
             self.header['dataset'].update({
                 'start_angle': (
-                    self.header['start_angle'] - self.header['delta_angle'] * ( self.header['dataset']['current'] - 1)
+                        self.header['start_angle'] - self.header['delta_angle'] * (
+                            self.header['dataset']['current'] - 1)
                 )
             })
 
@@ -339,7 +345,7 @@ class CBFDataSet(DataSet):
         self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.stats_data))
         self.header['min_intensity'] = self.stats_data.min()
         self.header['max_intensity'] = self.stats_data.max()
-        self.header['overloads'] = 4*(self.stats_data == self.header['saturated_value']).sum()
+        self.header['overloads'] = 4 * (self.stats_data == self.header['saturated_value']).sum()
         self.header['frame_number'] = self.current_frame
 
     def check_disk_frames(self):
