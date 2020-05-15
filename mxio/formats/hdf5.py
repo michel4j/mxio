@@ -1,16 +1,17 @@
+import itertools
 import os
 import re
+from datetime import datetime
+
 import cv2
-import itertools
 import hdf5plugin
 import h5py
-import pytz
 import numpy
+import pytz
 
-from datetime import datetime
-from ..log import get_module_logger
-from .. import utils
 from . import DataSet
+from .. import utils
+from ..log import get_module_logger
 
 # Configure Logging
 logger = get_module_logger('imageio')
@@ -32,9 +33,18 @@ HEADER_FIELDS = {
                       '/entry/instrument/detector/detectorSpecific/y_pixels_in_detector'),
 
 }
+
+
+def convert_date(text):
+    """
+    Convert ISO formatted date time into datetime object
+    """
+    return datetime.fromisoformat(text.decode('utf-8')),
+
+
 CONVERTERS = {
     'detector_type': lambda v: v.decode('utf-8'),
-    'date': lambda v: datetime.fromisoformat(v.decode('utf-8')),
+    'date': convert_date,
     'two_theta': float,
     'pixel_size': lambda v: float(v)*1000,
     'exposure_time': float,
