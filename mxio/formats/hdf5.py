@@ -5,6 +5,7 @@ from datetime import datetime
 
 import cv2
 import hdf5plugin
+import iso8601
 import h5py
 import numpy
 import pytz
@@ -39,7 +40,10 @@ def convert_date(text):
     """
     Convert ISO formatted date time into datetime object
     """
-    return datetime.fromisoformat(text.decode('utf-8'))
+    try:
+        return datetime.fromisoformat(text.decode('utf-8'))
+    except AttributeError:
+        return iso8601.parse_date(text.decode('utf-8'))
 
 
 CONVERTERS = {
@@ -67,6 +71,7 @@ NUMBER_FORMATS = {
 
 class HDF5DataSet(DataSet):
     name = 'Hierarchical Data Format (version 5) data'
+
     def __init__(self, path, header_only=False):
         super(HDF5DataSet, self).__init__()
         directory, filename = os.path.split(path)

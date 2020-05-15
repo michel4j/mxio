@@ -5,3 +5,4 @@ python-magic
 pytz
 pyyaml
 numpy
+iso8601

@@ -30,7 +30,7 @@ class DataSet(object):
         raise NotImplementedError('Not implemented!')
 
 
-@lru_cache
+@lru_cache(maxsize=None)
 def get_formats():
     pattern = os.path.join(os.path.dirname(os.path.abspath(__file__)), '*.py')
     modules = [
