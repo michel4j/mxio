@@ -95,6 +95,8 @@ def read_smv(filename, with_image=True):
 
 
 class SMVDataSet(DataSet):
+    name = 'SMV Area Detector Image'
+    
     def __init__(self, filename, header_only=False):
         super(SMVDataSet, self).__init__()
         self.filename = filename

@@ -1,29 +1,9 @@
 import os
-
-from .formats import marccd, smv
 import magic
-from .common import FormatNotAvailable, UnknownImageFormat, ImageIOError
-
-_image_type_map = {
-    'marCCD Area Detector Image': marccd.MarCCDDataSet,
-    'SMV Area Detector Image': smv.SMVDataSet,
-}
+from .formats import get_formats
+from .common import UnknownImageFormat, ImageIOError
 
 MAGIC_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'magic')
-
-try:
-    from .formats import cbf
-
-    _image_type_map['CBF Area Detector Image'] = cbf.CBFDataSet
-except FormatNotAvailable:
-    pass
-
-try:
-    from .formats import hdf5
-
-    _image_type_map['Hierarchical Data Format (version 5) data'] = hdf5.HDF5DataSet
-except FormatNotAvailable:
-    pass
 
 
 def get_file_type(filename):
@@ -44,17 +24,17 @@ def read_image(filename, header_only=False):
         - header: A dictionary 
         - image:  The actual PIL image of type 'I'
     """
-
+    formats = get_formats()
     full_id = get_file_type(filename)
     key = full_id.split(', ')[0].strip()
-    obj_class = _image_type_map.get(key)
+    obj_class = formats.get(key)
 
     if obj_class:
         img_obj = obj_class(filename, header_only)
         return img_obj
     else:
-        known_formats = ', '.join([v.split()[0] for v in _image_type_map.keys()])
-        raise UnknownImageFormat('Supported formats [{}]'.format(known_formats, ))
+        known_formats = ', '.join([v.split()[0] for v in formats.keys()])
+        raise TypeError('Supported formats [{}]'.format(known_formats, ))
 
 
 def read_header(filename):

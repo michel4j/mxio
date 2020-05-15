@@ -70,6 +70,8 @@ def read_marccd(filename, with_image=True):
 
 
 class MarCCDDataSet(DataSet):
+    name = 'marCCD Area Detector Image'
+
     def __init__(self, filename, header_only=False):
         super(MarCCDDataSet, self).__init__()
         self.filename = filename

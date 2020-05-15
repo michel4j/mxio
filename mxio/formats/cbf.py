@@ -87,15 +87,14 @@ def _format_error(code):
 
 try:
     cbflib = cdll.LoadLibrary('libcbf.so.0')
-except:
-    logger.error("CBF shared library 'libcbf.so' could not be loaded!")
-    raise FormatNotAvailable
+except Exception:
+    raise TypeError('CBF Shared Library not available')
+
 
 try:
     libc = cdll.LoadLibrary('libc.so.6')
-except:
-    logger.error("C runtime library 'libc.so.6' could not be loaded!")
-    raise FormatNotAvailable
+except Exception:
+    raise TypeError('C Shared Library not available')
 
 # define argument and return types
 libc.fopen.argtypes = [c_char_p, c_char_p]
@@ -310,6 +309,7 @@ def read_cbf(filename, with_image=True):
 
 
 class CBFDataSet(DataSet):
+    name = 'CBF Area Detector Image'
     def __init__(self, filename, header_only=False):
         super(CBFDataSet, self).__init__()
         self.filename = filename

@@ -1,6 +1,5 @@
 import os
 from setuptools import find_packages, setup
-from mxio.version import get_version
 
 with open(os.path.join(os.path.dirname(__file__), 'README.md')) as readme:
     long_description = readme.read()
@@ -12,9 +11,14 @@ with open(os.path.join(os.path.dirname(__file__), 'requirements.txt')) as f:
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 
+def package_version():
+    from mxio.version import get_version
+    return get_version()
+
+
 setup(
     name='mxio',
-    version=get_version(),
+    version=package_version(),
     packages=find_packages(),
     url='https://github.com/michel4j/mxio',
     include_package_data=True,
