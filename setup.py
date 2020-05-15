@@ -1,5 +1,6 @@
 import os
 from setuptools import find_packages, setup
+from mxio.version import get_version
 
 with open(os.path.join(os.path.dirname(__file__), 'README.md')) as readme:
     long_description = readme.read()
@@ -13,7 +14,7 @@ os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 setup(
     name='mxio',
-    version='2020.4.3',
+    version=get_version(),
     packages=find_packages(),
     url='https://github.com/michel4j/mxio',
     include_package_data=True,
