@@ -1,7 +1,7 @@
 import glob
 import importlib
 import os
-from functools import lru_cache
+from functools import cache
 
 from .. import log
 
@@ -30,7 +30,7 @@ class DataSet(object):
         raise NotImplementedError('Not implemented!')
 
 
-@lru_cache(maxsize=None)
+@cache
 def get_formats():
     pattern = os.path.join(os.path.dirname(os.path.abspath(__file__)), '*.py')
     modules = [
