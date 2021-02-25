@@ -62,6 +62,10 @@ CONVERTERS = {
     'detector_size': int,
 }
 
+DEFAULTS = {
+    'two_theta' : 0.0
+}
+
 OSCILLATION_FIELDS = '/entry/sample/goniometer/{}'
 NUMBER_FORMATS = {
     'uint16': numpy.int16,
@@ -114,8 +118,9 @@ class HDF5DataSet(DataSet):
                     self.header[key] = converter(self.raw[field][()])
                 else:
                     self.header[key] = tuple(converter(self.raw[sub_field][()]) for sub_field in field)
-            except ValueError:
+            except (ValueError, KeyError):
                 logger.error('Field corresponding to {} not found!'.format(key))
+                self.header[key] = DEFAULTS.get(key)
 
         self.header['name'] = self.name
         self.header['format'] = 'HDF5'
