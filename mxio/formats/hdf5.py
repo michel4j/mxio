@@ -17,23 +17,45 @@ from ..log import get_module_logger
 # Configure Logging
 logger = get_module_logger('imageio')
 
-HEADER_FIELDS = {
-    'detector_type': '/entry/instrument/detector/description',
-    'two_theta': '/entry/instrument/detector/goniometer/two_theta_range_average',
-    'pixel_size': '/entry/instrument/detector/x_pixel_size',
-    'exposure_time': '/entry/instrument/detector/frame_time',
-    'wavelength': '/entry/instrument/beam/incident_wavelength',
-    'date': '/entry/instrument/detector/detectorSpecific/data_collection_date',
-    'distance': '/entry/instrument/detector/detector_distance',
-    'beam_center': ('/entry/instrument/detector/beam_center_x', '/entry/instrument/detector/beam_center_y'),
-    'saturated_value': '/entry/instrument/detector/detectorSpecific/countrate_correction_count_cutoff',
-    #'num_frames': '/entry/instrument/detector/detectorSpecific/nimages',
-    'energy': '/entry/instrument/detector/detectorSpecific/photon_energy',
-    'sensor_thickness': '/entry/instrument/detector/sensor_thickness',
-    'detector_size': ('/entry/instrument/detector/detectorSpecific/x_pixels_in_detector',
-                      '/entry/instrument/detector/detectorSpecific/y_pixels_in_detector'),
-
+HEADERS = {
+    None: {
+        'detector_type': '/entry/instrument/detector/description',
+        'two_theta': '/entry/instrument/detector/goniometer/two_theta_range_average',
+        'pixel_size': '/entry/instrument/detector/x_pixel_size',
+        'exposure_time': '/entry/instrument/detector/frame_time',
+        'wavelength': '/entry/instrument/beam/incident_wavelength',
+        'date': '/entry/instrument/detector/detectorSpecific/data_collection_date',
+        'distance': '/entry/instrument/detector/detector_distance',
+        'beam_center': ('/entry/instrument/detector/beam_center_x', '/entry/instrument/detector/beam_center_y'),
+        'saturated_value': '/entry/instrument/detector/detectorSpecific/countrate_correction_count_cutoff',
+        'energy': '/entry/instrument/beam/incident_wavelength',
+        'sensor_thickness': '/entry/instrument/detector/sensor_thickness',
+        'detector_size': ('/entry/instrument/detector/detectorSpecific/x_pixels_in_detector',
+                          '/entry/instrument/detector/detectorSpecific/y_pixels_in_detector'),
+    },
+    'NXmx': {
+        'detector_type': '/entry/instrument/detector/description',
+        'two_theta': '/entry/instrument/detector/goniometer/two_theta_range_average',
+        'pixel_size': '/entry/instrument/detector/x_pixel_size',
+        'exposure_time': '/entry/instrument/detector/count_time',
+        'wavelength': '/entry/instrument/beam/incident_wavelength',
+        'date': '/entry/start_time',
+        'distance': '/entry/instrument/detector/detector_distance',
+        'beam_center': ('/entry/instrument/detector/beam_center_x', '/entry/instrument/detector/beam_center_y'),
+        'saturated_value': '/entry/instrument/detector/saturation_value',
+        'energy': '/entry/instrument/beam/incident_wavelength',
+        'sensor_thickness': '/entry/instrument/detector/sensor_thickness',
+        'detector_size': ('/entry/instrument/detector/detectorSpecific/x_pixels_in_detector',
+                          '/entry/instrument/detector/detectorSpecific/y_pixels_in_detector'),
+    },
 }
+
+
+def wavelength_to_energy(wavelength):
+    """Convert wavelength in angstroms to energy in keV."""
+    if wavelength == 0.0:
+        return 0.0
+    return 12398.419300923944 / (wavelength * 1000.0)
 
 
 def convert_date(text):
@@ -57,7 +79,7 @@ CONVERTERS = {
     'beam_center': float,
     'saturated_value': int,
     'num_frames': int,
-    'energy': float,
+    'energy': wavelength_to_energy,
     'sensor_thickness': lambda v: float(v)*1000,
     'detector_size': int,
 }
@@ -111,7 +133,13 @@ class HDF5DataSet(DataSet):
 
     def read_dataset(self):
         self.header = {}
-        for key, field in HEADER_FIELDS.items():
+        try:
+            htype = self.raw['/entry/description'].decode('utf-8')
+        except:
+            htype = None
+
+        header_fields = HEADERS[htype]
+        for key, field in header_fields.items():
             converter = CONVERTERS.get(key, lambda v: v)
             try:
                 if not isinstance(field, (tuple, list)):
