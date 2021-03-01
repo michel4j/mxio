@@ -88,11 +88,21 @@ DEFAULTS = {
     'two_theta' : 0.0
 }
 
-OSCILLATION_FIELDS = '/entry/sample/goniometer/{}'
+OSCILLATION_FIELDS = {
+    None: '/entry/sample/goniometer/{}',
+    'NXmx': '/entry/sample/transformations/{}',
+}
+
 NUMBER_FORMATS = {
     'uint16': numpy.int16,
     'uint32': numpy.int32,
 }
+
+
+def get_section_name(kind, key):
+    if kind == 'NXmx':
+        return key.split('_')[-1]
+    return key
 
 
 class HDF5DataSet(DataSet):
@@ -100,6 +110,7 @@ class HDF5DataSet(DataSet):
 
     def __init__(self, path, header_only=False):
         super(HDF5DataSet, self).__init__()
+        self.hdf_type = None
         directory, filename = os.path.split(path)
 
         self.directory = directory
@@ -109,7 +120,7 @@ class HDF5DataSet(DataSet):
         self.section_names = []
 
         p0 = re.compile('^(?P<root_name>.+)_master\.h5$')
-        p1 = re.compile('^(?P<root_name>.+)_(?P<section>data_\d+)\.h5')
+        p1 = re.compile('^(?P<root_name>.+)_(?P<section>(?:data_)?\d+)\.h5')
         m0 = p0.match(filename)
         m1 = p1.match(filename)
 
@@ -134,11 +145,11 @@ class HDF5DataSet(DataSet):
     def read_dataset(self):
         self.header = {}
         try:
-            htype = self.raw['/entry/description'].decode('utf-8')
+            self.hdf_type = self.raw['/entry/definition'][()].decode('utf-8')
         except:
-            htype = None
+            self.hdf_type = None
 
-        header_fields = HEADERS[htype]
+        header_fields = HEADERS[self.hdf_type]
         for key, field in header_fields.items():
             converter = CONVERTERS.get(key, lambda v: v)
             try:
@@ -154,7 +165,9 @@ class HDF5DataSet(DataSet):
         self.header['format'] = 'HDF5'
         self.header['filename'] = os.path.basename(self.master_file)
         self.sections = {
-            name: (d.attrs['image_nr_low'], d.attrs['image_nr_high']) for name, d in self.raw['/entry/data'].items()
+            name: (d.attrs['image_nr_low'], d.attrs['image_nr_high'])
+            for name, d in self.raw['/entry/data'].items()
+            if name.startswith('data_')
         }
 
         self.section_names = sorted(self.sections.keys())
@@ -163,17 +176,23 @@ class HDF5DataSet(DataSet):
         self.current_frame = self.sections[self.current_section][0]
 
         # try to find oscillation axis and parameters as first non-zero average
+        oscillation_fields = OSCILLATION_FIELDS[self.hdf_type]
+
         for axis in ['chi', 'kappa', 'omega', 'phi']:
-            start_angles = self.raw[OSCILLATION_FIELDS.format(axis)][()]
-            delta_angle = self.raw[OSCILLATION_FIELDS.format(axis + '_range_average')][()]
-            total_angle = self.raw[OSCILLATION_FIELDS.format(axis + '_range_total')][()]
-            self.header['start_angle'] = start_angles[0]
-            self.header['delta_angle'] = delta_angle
-            self.header['total_angle'] = total_angle
-            self.header['rotation_axis'] = axis
-            self.start_angles = start_angles
-            if start_angles.mean() != 0.0 and delta_angle*total_angle != 0.0:
-                break
+            try:
+                start_angles = self.raw[oscillation_fields.format(axis)][()]
+                if len(start_angles) < 2: continue
+                delta_angle = numpy.diff(start_angles).mean()
+                total_angle = numpy.sum(start_angles)
+                self.header['start_angle'] = start_angles[0]
+                self.header['delta_angle'] = delta_angle
+                self.header['total_angle'] = total_angle
+                self.header['rotation_axis'] = axis
+                self.start_angles = start_angles
+                if start_angles.mean() != 0.0 and delta_angle*total_angle != 0.0:
+                    break
+            except KeyError:
+                pass
 
         self.check_disk_sections()
         self.read_image()
@@ -203,7 +222,7 @@ class HDF5DataSet(DataSet):
         self.data = data
 
     def check_disk_sections(self):
-        data_file = os.path.join(self.directory, self.root_name + '_' + self.section_names[0] + '.h5')
+        data_file = os.path.join(self.directory, self.root_name + '_' + get_section_name(self.hdf_type, self.section_names[0]) + '.h5')
         dataset = utils.file_sequences(data_file)
         if dataset:
             link_tmpl = dataset['name']
