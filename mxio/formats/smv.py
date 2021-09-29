@@ -10,7 +10,7 @@ from . import DataSet
 from ..log import get_module_logger
 
 # Configure Logging
-logger = get_module_logger('imageio')
+logger = get_module_logger('mxio')
 
 DECODER_DICT = {
     "unsigned_short": (ctypes.c_uint16, 'F;16','F;16B'),

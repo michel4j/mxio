@@ -15,10 +15,10 @@ from .. import utils
 from ..log import get_module_logger
 
 # Configure Logging
-logger = get_module_logger('imageio')
+logger = get_module_logger('mxio')
 
 HEADERS = {
-    None: {
+    'HDF5': {
         'detector_type': '/entry/instrument/detector/description',
         'two_theta': '/entry/instrument/detector/goniometer/two_theta_range_average',
         'pixel_size': '/entry/instrument/detector/x_pixel_size',
@@ -85,7 +85,7 @@ CONVERTERS = {
 }
 
 DEFAULTS = {
-    'two_theta' : 0.0
+    'two_theta': 0.0
 }
 
 OSCILLATION_FIELDS = {
@@ -120,7 +120,7 @@ class HDF5DataSet(DataSet):
         self.section_names = []
 
         p0 = re.compile('^(?P<root_name>.+)_master\.h5$')
-        p1 = re.compile('^(?P<root_name>.+)_(?P<section>(?:data_)?\d+)\.h5')
+        p1 = re.compile('^(?P<root_name>.+?)_(?P<section>(?:data_)?\d+)\.h5')
         m0 = p0.match(filename)
         m1 = p1.match(filename)
 
@@ -136,6 +136,9 @@ class HDF5DataSet(DataSet):
         else:
             self.master_file = path
             self.root_name = os.path.splitext(filename)[0]
+
+        print(self.root_name, self.master_file, self.current_section)
+
         self.name = self.root_name
         self.raw = h5py.File(self.master_file, 'r')
         self.mask = None
@@ -147,7 +150,7 @@ class HDF5DataSet(DataSet):
         try:
             self.hdf_type = self.raw['/entry/definition'][()].decode('utf-8')
         except:
-            self.hdf_type = None
+            self.hdf_type = 'HDF5'
 
         header_fields = HEADERS[self.hdf_type]
         for key, field in header_fields.items():
@@ -162,12 +165,11 @@ class HDF5DataSet(DataSet):
                 self.header[key] = DEFAULTS.get(key)
 
         self.header['name'] = self.name
-        self.header['format'] = 'HDF5'
+        self.header['format'] = self.hdf_type
         self.header['filename'] = os.path.basename(self.master_file)
         self.sections = {}
         for name, d in self.raw['/entry/data'].items():
-            print(name, d)
-            if name.startswith('data_') and d is not None:
+            if d is not None and 'data_' in name:
                 self.sections[name] = (d.attrs['image_nr_low'], d.attrs['image_nr_high'])
 
         self.section_names = sorted(self.sections.keys())

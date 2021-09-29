@@ -8,7 +8,7 @@ from . import DataSet
 from ..log import get_module_logger
 
 # Configure Logging
-logger = get_module_logger('imageio')
+logger = get_module_logger('mxio')
 
 
 def read_marccd(filename, with_image=True):

@@ -10,7 +10,7 @@ from ..common import *
 from ..log import get_module_logger
 
 # Configure Logging
-logger = get_module_logger('imageio')
+logger = get_module_logger('mxio')
 
 # Define CBF Error Code constants
 CBF_FORMAT = 0x00000001  # 1
