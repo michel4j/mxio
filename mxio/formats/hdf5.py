@@ -89,7 +89,7 @@ DEFAULTS = {
 }
 
 OSCILLATION_FIELDS = {
-    None: '/entry/sample/goniometer/{}',
+    'HDF5': '/entry/sample/goniometer/{}',
     'NXmx': '/entry/sample/transformations/{}',
 }
 
@@ -110,11 +110,13 @@ class HDF5DataSet(DataSet):
 
     def __init__(self, path, header_only=False):
         super(HDF5DataSet, self).__init__()
-        self.hdf_type = None
+        self.hdf_type = 'HDF5'
+        self.section_prefix = ''
         directory, filename = os.path.split(path)
 
         self.directory = directory
         self.current_section = None
+        self.ref_section = None
         self.current_frame = 1
         self.disk_sections = []
         self.section_names = []
@@ -132,12 +134,10 @@ class HDF5DataSet(DataSet):
             params = m1.groupdict()
             self.master_file = os.path.join(self.directory, params['root_name'] + '_master.h5')
             self.root_name = params['root_name']
-            self.current_section = params['section']
+            self.ref_section = params['section']
         else:
             self.master_file = path
             self.root_name = os.path.splitext(filename)[0]
-
-        print(self.root_name, self.master_file, self.current_section)
 
         self.name = self.root_name
         self.raw = h5py.File(self.master_file, 'r')
@@ -149,8 +149,10 @@ class HDF5DataSet(DataSet):
         self.header = {}
         try:
             self.hdf_type = self.raw['/entry/definition'][()].decode('utf-8')
+            self.section_prefix = 'data_'
         except:
             self.hdf_type = 'HDF5'
+            self.section_prefix = ''
 
         header_fields = HEADERS[self.hdf_type]
         for key, field in header_fields.items():
@@ -167,13 +169,17 @@ class HDF5DataSet(DataSet):
         self.header['name'] = self.name
         self.header['format'] = self.hdf_type
         self.header['filename'] = os.path.basename(self.master_file)
+
         self.sections = {}
         for name, d in self.raw['/entry/data'].items():
-            if d is not None and 'data_' in name:
+            if d is not None and name.startswith('data_'):
                 self.sections[name] = (d.attrs['image_nr_low'], d.attrs['image_nr_high'])
 
         self.section_names = sorted(self.sections.keys())
-        if not self.current_section:
+        # NXmx data names don't match file pattern 'data_' prefix is missing
+        if self.ref_section:
+             self.current_section = f'{self.section_prefix}{self.ref_section}'
+        else:
             self.current_section = self.section_names[0]
         self.current_frame = self.sections[self.current_section][0]
 
@@ -236,7 +242,7 @@ class HDF5DataSet(DataSet):
             frames = list(itertools.chain.from_iterable(range(v[0], v[1] + 1) for v in self.disk_sections.values()))
             width = 6
             template = '{root_name}_{{field}}.h5'.format(root_name=self.root_name)
-            regex = r'^{root_name}_data_(\d{{{width}}}).h5$'.format(width=width, root_name=self.root_name)
+            regex = r'^{root_name}_{prefix}(\d{{{width}}}).h5$'.format(width=width, root_name=self.root_name, prefix=self.section_prefix)
             current = self.current_frame
 
             self.header['dataset'] = {
