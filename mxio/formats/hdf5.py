@@ -164,11 +164,11 @@ class HDF5DataSet(DataSet):
         self.header['name'] = self.name
         self.header['format'] = 'HDF5'
         self.header['filename'] = os.path.basename(self.master_file)
-        self.sections = {
-            name: (d.attrs['image_nr_low'], d.attrs['image_nr_high'])
-            for name, d in self.raw['/entry/data'].items()
-            if name.startswith('data_')
-        }
+        self.sections = {}
+        for name, d in self.raw['/entry/data'].items():
+            print(name, d)
+            if name.startswith('data_') and d is not None:
+                self.sections[name] = (d.attrs['image_nr_low'], d.attrs['image_nr_high'])
 
         self.section_names = sorted(self.sections.keys())
         if not self.current_section:
