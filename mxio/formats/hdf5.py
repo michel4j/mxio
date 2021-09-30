@@ -242,7 +242,8 @@ class HDF5DataSet(DataSet):
             frames = list(itertools.chain.from_iterable(range(v[0], v[1] + 1) for v in self.disk_sections.values()))
             width = 6
             template = '{root_name}_{{field}}.h5'.format(root_name=self.root_name)
-            regex = r'^{root_name}_{prefix}(\d{{{width}}}).h5$'.format(width=width, root_name=self.root_name, prefix=self.section_prefix)
+            prefix = {'HDF5': 'data_', 'NXmx': ''}[self.hdf_type]
+            regex = r'^{root_name}_{prefix}(\d{{{width}}}).h5$'.format(width=width, root_name=self.root_name, prefix=prefix)
             current = self.current_frame
 
             self.header['dataset'] = {
