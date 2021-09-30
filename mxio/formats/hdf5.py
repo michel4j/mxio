@@ -89,9 +89,17 @@ DEFAULTS = {
 }
 
 OSCILLATION_FIELDS = {
-    'HDF5': '/entry/sample/goniometer/{}',
-    'NXmx': '/entry/sample/transformations/{}',
+    'HDF5': {
+        'start': '/entry/sample/goniometer/{}',
+        'total': '/entry/sample/goniometer/{}_range_total',
+        'delta': '/entry/sample/goniometer/{}_range_average'
+    },
+    'NXmx': {
+        'start': '/entry/sample/transformations/{}',
+        'delta': '/entry/sample/transformations/{}_increment_set'
+    },
 }
+
 
 NUMBER_FORMATS = {
     'uint16': numpy.int16,
@@ -186,18 +194,23 @@ class HDF5DataSet(DataSet):
         # try to find oscillation axis and parameters as first non-zero average
         oscillation_fields = OSCILLATION_FIELDS[self.hdf_type]
 
-        for axis in ['chi', 'kappa', 'omega', 'phi']:
+        for axis in ['omega', 'phi', 'chi', 'kappa']:
             try:
-                start_angles = self.raw[oscillation_fields.format(axis)][()]
+                start_angles = self.raw[oscillation_fields['start'].format(axis)][()]
                 if len(start_angles) < 2: continue
-                delta_angle = numpy.diff(start_angles).mean()
-                total_angle = numpy.sum(start_angles)
-                self.header['start_angle'] = start_angles[0]
-                self.header['delta_angle'] = delta_angle
-                self.header['total_angle'] = total_angle
-                self.header['rotation_axis'] = axis
-                self.start_angles = start_angles
-                if start_angles.mean() != 0.0 and delta_angle*total_angle != 0.0:
+                if start_angles.mean() != 0.0 and numpy.diff(start_angles).sum() != 0:
+                    # found the right axis
+                    self.header['rotation_axis'] = axis
+                    for field, path in OSCILLATION_FIELDS[self.hdf_type].items():
+                        self.header[f'{field}_angle'] = self.raw[path.format(axis)][()]
+
+                    # start angles are always sequences
+                    self.header['start_angle'] = self.header['start_angle'][0]
+
+                    if self.hdf_type == 'NXmx':
+                        self.header['total_angle'] = numpy.sum(self.header['delta_angle'])
+                        self.header['delta_angle'] = self.header['delta_angle'][0]
+
                     break
             except KeyError:
                 pass
