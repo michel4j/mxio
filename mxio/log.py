@@ -63,12 +63,16 @@ class ColoredConsoleHandler(logging.StreamHandler):
                 msg = TermColor.debug(msg)
             self.stream.write("{}\n".format(msg))
             self.flush()
-        except:
+        except RecursionError:
+            raise
+        except Exception:
             self.handleError(record)
 
 
 def get_module_logger(name):
-    """A factory which creates loggers with the given name and returns it."""
+    """
+    A factory which creates loggers with the given name and returns it.
+    """
     name = name.split('.')[-1]
     _logger = logging.getLogger(name)
     _logger.setLevel(LOG_LEVEL)
@@ -77,7 +81,9 @@ def get_module_logger(name):
 
 
 def log_to_console(level=LOG_LEVEL):
-    """Add a log handler which logs to the console."""
+    """
+    Add a log handler which logs to the console.
+    """
 
     console = ColoredConsoleHandler()
     console.setLevel(level)
@@ -87,7 +93,9 @@ def log_to_console(level=LOG_LEVEL):
 
 
 def log_to_file(filename, level=logging.DEBUG):
-    """Add a log handler which logs to the console."""
+    """
+    Add a log handler which logs to the console.
+    """
     logfile = logging.FileHandler(filename)
     logfile.setLevel(level)
     formatter = logging.Formatter('%(asctime)s [%(name)s] %(message)s', '%b/%d %H:%M:%S')

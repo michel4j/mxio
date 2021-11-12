@@ -59,4 +59,7 @@ def file_sequences(filename):
 
 
 def image_histogram(data):
-    hist, edges = numpy.histogram(data, density=False)
+    """
+    Calculate and return the bins and edges histogram for the provided data
+    """
+    return numpy.histogram(data, density=False)

@@ -11,7 +11,6 @@ import numpy
 import pytz
 
 from . import DataSet
-from .. import utils
 from ..log import get_module_logger
 
 # Configure Logging
@@ -20,7 +19,7 @@ logger = get_module_logger('mxio')
 HEADERS = {
     'HDF5': {
         'detector_type': '/entry/instrument/detector/description',
-        'two_theta': '/entry/instrument/detector/goniometer/two_theta_range_average',
+        'two_theta': '/entry/instrument/detector/goniometer/two_theta',
         'pixel_size': '/entry/instrument/detector/x_pixel_size',
         'exposure_time': '/entry/instrument/detector/frame_time',
         'wavelength': '/entry/instrument/beam/incident_wavelength',
@@ -35,7 +34,7 @@ HEADERS = {
     },
     'NXmx': {
         'detector_type': '/entry/instrument/detector/description',
-        'two_theta': '/entry/instrument/detector/goniometer/two_theta_range_average',
+        'two_theta': '/entry/instrument/detector/goniometer/two_theta',
         'pixel_size': '/entry/instrument/detector/x_pixel_size',
         'exposure_time': '/entry/instrument/detector/count_time',
         'wavelength': '/entry/instrument/beam/incident_wavelength',
@@ -51,8 +50,20 @@ HEADERS = {
 }
 
 
+def save_array(name, data):
+    """
+    Save an array to hdf5 using BitShuffle
+    :param name: Name of array. Filename will be suffixed with ".h5"
+    :param data: Numpy array to save
+    """
+    with h5py.File(f'{name}.h5', 'w') as fobj:
+        fobj.create_dataset(name, data=data, **hdf5plugin.Bitshuffle(nelems=0, lz4=True))
+
+
 def wavelength_to_energy(wavelength):
-    """Convert wavelength in angstroms to energy in keV."""
+    """
+    Convert wavelength in angstroms to energy in keV.
+    """
     if wavelength == 0.0:
         return 0.0
     return 12398.419300923944 / (wavelength * 1000.0)
@@ -71,7 +82,7 @@ def convert_date(text):
 CONVERTERS = {
     'detector_type': lambda v: v.decode('utf-8'),
     'date': convert_date,
-    'two_theta': float,
+    'two_theta': lambda v: float(v[0]),
     'pixel_size': lambda v: float(v)*1000,
     'exposure_time': float,
     'wavelength': float,
@@ -126,7 +137,6 @@ class HDF5DataSet(DataSet):
         self.current_section = None
         self.ref_section = None
         self.current_frame = 1
-        self.disk_sections = []
         self.section_names = []
 
         p0 = re.compile('^(?P<root_name>.+)_master\.h5$')
@@ -171,7 +181,7 @@ class HDF5DataSet(DataSet):
                 else:
                     self.header[key] = tuple(converter(self.raw[sub_field][()]) for sub_field in field)
             except (ValueError, KeyError):
-                logger.error('Field corresponding to {} not found!'.format(key))
+                logger.warning('Field corresponding to {} not found!'.format(key))
                 self.header[key] = DEFAULTS.get(key)
 
         self.header['name'] = self.name
@@ -196,16 +206,16 @@ class HDF5DataSet(DataSet):
 
         for axis in ['omega', 'phi', 'chi', 'kappa']:
             try:
-                start_angles = self.raw[oscillation_fields['start'].format(axis)][()]
-                if len(start_angles) < 2: continue
-                if start_angles.mean() != 0.0 and numpy.diff(start_angles).sum() != 0:
+                self.start_angles = self.raw[oscillation_fields['start'].format(axis)][()]
+                if len(self.start_angles) < 2: continue
+                if self.start_angles.mean() != 0.0 and numpy.diff(self.start_angles).sum() != 0:
                     # found the right axis
                     self.header['rotation_axis'] = axis
                     for field, path in OSCILLATION_FIELDS[self.hdf_type].items():
                         self.header[f'{field}_angle'] = self.raw[path.format(axis)][()]
 
                     # start angles are always sequences
-                    self.header['start_angle'] = self.header['start_angle'][0]
+                    self.header['start_angle'] = self.start_angles[0]
 
                     if self.hdf_type == 'NXmx':
                         self.header['total_angle'] = numpy.sum(self.header['delta_angle'])
@@ -215,7 +225,22 @@ class HDF5DataSet(DataSet):
             except KeyError:
                 pass
 
-        self.check_disk_sections()
+        frames = list(itertools.chain.from_iterable(range(v[0], v[1] + 1) for v in self.sections.values()))
+        width = 6
+        template = '{root_name}_{{field}}.h5'.format(root_name=self.root_name)
+        prefix = {'HDF5': 'data_', 'NXmx': ''}[self.hdf_type]
+        regex = r'^{root_name}_{prefix}(\d{{{width}}}).h5$'.format(width=width, root_name=self.root_name, prefix=prefix)
+        self.header['dataset'] = {
+            'name': '{root_name}_master.h5'.format(root_name=self.root_name),
+            'start_time': self.header['date'].replace(tzinfo=pytz.utc),
+            'label': self.root_name,
+            'directory': self.directory,
+            'template': template.format(field='?' * width),
+            'regex': regex,
+            'start_angle': self.header['start_angle'],
+            'sequence': frames,
+            'current': self.current_frame
+        }
         self.read_image()
 
     def read_image(self):
@@ -242,45 +267,12 @@ class HDF5DataSet(DataSet):
         self.header['frame_number'] = self.current_frame
         self.data = data
 
-    def check_disk_sections(self):
-        data_file = os.path.join(self.directory, self.root_name + '_' + get_section_name(self.hdf_type, self.section_names[0]) + '.h5')
-        dataset = utils.file_sequences(data_file)
-        if dataset:
-            link_tmpl = dataset['name']
-            self.disk_sections = {
-                section_name: images
-                for i, (section_name, images) in enumerate(self.sections.items())
-                if os.path.exists(os.path.join(self.directory, link_tmpl.format(i+1)))
-            }
-            frames = list(itertools.chain.from_iterable(range(v[0], v[1] + 1) for v in self.disk_sections.values()))
-            width = 6
-            template = '{root_name}_{{field}}.h5'.format(root_name=self.root_name)
-            prefix = {'HDF5': 'data_', 'NXmx': ''}[self.hdf_type]
-            regex = r'^{root_name}_{prefix}(\d{{{width}}}).h5$'.format(width=width, root_name=self.root_name, prefix=prefix)
-            current = self.current_frame
-
-            self.header['dataset'] = {
-                'name': '{root_name}_master.h5'.format(root_name=self.root_name),
-                'start_time': self.header['date'].replace(tzinfo=pytz.utc),
-                'label': self.root_name,
-                'directory': self.directory,
-                'template': template.format(field='?' * width),
-                'reference': dataset['reference'],
-                'regex': regex,
-                'start_angle': float(self.start_angles[0]),
-                'sequence': frames,
-                'current': current
-            }
-        else:
-            self.header['dataset'] = {}
-
     def get_frame(self, index=1):
         """
         Load a specific frame
         :param index: frame index
         :return:
         """
-        self.check_disk_sections()
         for section_name, section_limits in self.sections.items():
             if section_name in self.disk_sections:
                 if section_limits[0] <= index <= section_limits[1]:
@@ -293,7 +285,7 @@ class HDF5DataSet(DataSet):
 
     def next_frame(self):
         """Load the next frame in the dataset"""
-        self.check_disk_sections()
+
         next_frame = self.current_frame + 1
         section_limits = self.sections[self.current_section]
         if next_frame <= section_limits[1]:
@@ -317,7 +309,7 @@ class HDF5DataSet(DataSet):
 
     def prev_frame(self):
         """Load the previous frame in the dataset"""
-        self.check_disk_sections()
+
         next_frame = self.current_frame - 1
         section_limits = self.sections[self.current_section]
         if next_frame >= section_limits[0]:

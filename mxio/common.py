@@ -8,3 +8,6 @@ class FormatNotAvailable(Exception):
 
 class ImageIOError(Exception):
     pass
+
+
+__all__ = [UnknownImageFormat, FormatNotAvailable, ImageIOError]
