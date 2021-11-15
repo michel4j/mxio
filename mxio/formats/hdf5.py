@@ -168,7 +168,7 @@ class HDF5DataSet(DataSet):
         try:
             self.hdf_type = self.raw['/entry/definition'][()].decode('utf-8')
             self.section_prefix = 'data_'
-        except:
+        except (ValueError, KeyError):
             self.hdf_type = 'HDF5'
             self.section_prefix = ''
 

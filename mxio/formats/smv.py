@@ -44,10 +44,11 @@ def read_smv(filename, with_image=True):
     _el_type = DECODER_DICT[_type][0]
 
     # decoder suffix for endianess
-    if tmp_info.get('byte_order') == 'big_endian':
-        _raw_decoder = DECODER_DICT[_type][2]
-    else:
-        _raw_decoder = DECODER_DICT[_type][1]
+    # if tmp_info.get('byte_order') == 'big_endian':
+    #     _raw_decoder = DECODER_DICT[_type][2]
+    # else:
+    #     _raw_decoder = DECODER_DICT[_type][1]
+
     info['delta_angle'] = float(tmp_info['osc_range'])
     info['distance'] = float(tmp_info['distance'])
     info['wavelength'] = float(tmp_info['wavelength'])
