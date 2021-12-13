@@ -1,6 +1,7 @@
 import itertools
 import os
 import re
+from pathlib import Path
 from datetime import datetime
 
 import cv2
@@ -131,12 +132,20 @@ class HDF5DataSet(DataSet):
         super(HDF5DataSet, self).__init__()
         self.hdf_type = 'HDF5'
         self.section_prefix = ''
-        directory, filename = os.path.split(path)
+
+        image_path = Path(path)
+        if re.match(r'\d+', image_path.name):
+            self.current_frame = int(image_path.name)
+            filename = image_path.parent.name
+            directory = str(image_path.parent.parent)
+        else:
+            self.current_frame = None
+            filename = image_path.name
+            directory = str(image_path.parent)
 
         self.directory = directory
         self.current_section = None
         self.ref_section = None
-        self.current_frame = 1
         self.section_names = []
 
         p0 = re.compile('^(?P<root_name>.+)_master\.h5$')
@@ -197,9 +206,16 @@ class HDF5DataSet(DataSet):
         # NXmx data names don't match file pattern 'data_' prefix is missing
         if self.ref_section:
              self.current_section = f'{self.section_prefix}{self.ref_section}'
+             self.current_frame = self.sections[self.current_section][0]
         else:
-            self.current_section = self.section_names[0]
-        self.current_frame = self.sections[self.current_section][0]
+            if self.current_frame is None:
+                self.current_section = self.section_names[0]
+                self.current_frame = self.sections[self.current_section][0]
+            else:
+                for section_name, section_limits in self.sections.items():
+                    if section_limits[0] <= self.current_frame <= section_limits[1]:
+                        self.current_section = section_name
+                        break
 
         # try to find oscillation axis and parameters as first non-zero average
         oscillation_fields = OSCILLATION_FIELDS[self.hdf_type]
@@ -274,13 +290,12 @@ class HDF5DataSet(DataSet):
         :return:
         """
         for section_name, section_limits in self.sections.items():
-            if section_name in self.disk_sections:
-                if section_limits[0] <= index <= section_limits[1]:
-                    self.current_frame = index
-                    self.current_section = section_name
-                    self.header['start_angle'] = self.start_angles[self.current_frame-1]
-                    self.read_image()
-                    return True
+            if section_limits[0] <= index <= section_limits[1]:
+                self.current_frame = index
+                self.current_section = section_name
+                self.header['start_angle'] = self.start_angles[self.current_frame-1]
+                self.read_image()
+                return True
         return False
 
     def next_frame(self):
@@ -296,11 +311,9 @@ class HDF5DataSet(DataSet):
             if i <= len(self.section_names)-1:
                 next_section = self.section_names[i]
                 next_frame = self.sections[next_section][0]
-                if next_section in self.disk_sections:
-                    self.current_frame = next_frame
-                    self.current_section = next_section
-                else:
-                    return False
+
+                self.current_frame = next_frame
+                self.current_section = next_section
             else:
                 return False
         self.header['start_angle'] = float(self.start_angles[self.current_frame - 1])
@@ -320,11 +333,10 @@ class HDF5DataSet(DataSet):
             if i >= 0:
                 next_section = self.section_names[i]
                 next_frame = self.sections[next_section][1]
-                if next_section in self.disk_sections:
-                    self.current_frame = next_frame
-                    self.current_section = next_section
-                else:
-                    return False
+
+                self.current_frame = next_frame
+                self.current_section = next_section
+
             else:
                 return False
         self.header['start_angle'] = self.start_angles[self.current_frame - 1]
