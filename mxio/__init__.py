@@ -30,7 +30,7 @@ def read_image(path,  header_only=False):
     image_path = Path(path)
 
     # container formats have the index as a file within the image "directory"
-    if re.match(r'\d+', image_path.name):
+    if re.match(r'^\d+$', image_path.name):
         filename = str(image_path.parent)
     else:
         filename = path
