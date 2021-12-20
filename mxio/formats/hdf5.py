@@ -134,7 +134,7 @@ class HDF5DataSet(DataSet):
         self.section_prefix = ''
 
         image_path = Path(path)
-        if re.match(r'\d+', image_path.name):
+        if re.match(r'^\d+$', image_path.name):
             self.current_frame = int(image_path.name)
             filename = image_path.parent.name
             directory = str(image_path.parent.parent)
