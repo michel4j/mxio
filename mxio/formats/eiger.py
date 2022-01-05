@@ -1,13 +1,13 @@
-import copy
+import json
 
 import cv2
 import lz4.block
 import lz4.frame
 import numpy
-import json
-from ..misc import bshuf
+
 from . import DataSet
 from ..log import get_module_logger
+from ..misc import bshuf
 
 # Configure Logging
 logger = get_module_logger('mxio')
