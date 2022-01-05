@@ -137,12 +137,12 @@ class EigerStream(DataSet):
         dtype = dtype.newbyteorder(frame['encoding'][-1]) if frame['encoding'][-1] in ['<', '>'] else dtype
         frame_number = int(info['frame']) + 1
         metadata = {
-            'data_series': frame['series'],
+            'data_series': info['series'],
             'saturated_value': 1e6,
             'overloads': 0,
             'frame_number': frame_number,
-            'filename': f"{self.name}-{frame['series']}",
-            'name': f"{self.name}-{frame['series']}",
+            'filename': f"{self.name}-{info['series']}",
+            'name': f"{self.name}-{info['series']}",
             'start_angle': self._start_angle + frame_number * self.header['delta_angle'],
         }
 
