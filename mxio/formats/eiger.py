@@ -1,3 +1,5 @@
+import copy
+
 import cv2
 import lz4.block
 import lz4.frame
@@ -49,8 +51,9 @@ CONVERTERS = {
 
 
 class EigerStream(DataSet):
-    def __init__(self):
+    def __init__(self, name="Stream"):
         super().__init__()
+        self.name = name
         self._start_angle = 0.0
 
     def read_dataset(self):
@@ -58,6 +61,11 @@ class EigerStream(DataSet):
         pass
 
     def read_header(self, header_data):
+        """
+        Read header information from Eiger Stream and update dataset header
+
+        :param header_data:  bytes, second item in multipart message received from Eiger stream, of htype 'dheader-1.0'
+        """
         header = json.loads(header_data)
         metadata = {}
         for key, field in HEADER_FIELDS.items():
@@ -83,20 +91,61 @@ class EigerStream(DataSet):
         self.header = metadata
 
     def read_image(self, info, series_data, img_data):
+        """
+        Read image information from Eiger Stream and update dataset data
+
+        :param info:  dictionary, of message header with htype='dimage-1.0'
+        :param series_data: bytes, second item of message obtained from Stream. Raw bytes
+        :param image_data: bytes, third item of message obtained from Stream. Raw bytes.
+
+        """
+        metadata, data = self.parse_image(info, series_data, img_data)
+        self.header.update(metadata)
+        stats_data = data[(data >= 0) & (data < metadata['saturated_value'])]
+
+        try:
+            avg, stdev = numpy.ravel(cv2.meanStdDev(stats_data))
+        except Exception as e:
+            avg = stdev = 0.0
+            logger.warning(f'Error calculating frame statistics: {e}')
+
+        metadata.update({
+            'average_intensity': avg,
+            'std_dev': stdev,
+            'min_intensity': stats_data.min(),
+            'max_intensity': stats_data.max(),
+        })
+        self.data = data
+        self.stats_data = stats_data
+        self.header.update(metadata)
+
+    def parse_image(self, info, series_data, img_data):
+        """
+        Parse image information from Eiger Stream without updating internal state
+
+        :param info:  dictionary, of message header with htype='dimage-1.0'
+        :param series_data: bytes, second item of message obtained from Stream. Raw bytes
+        :param img_data: bytes, third item of message obtained from Stream. Raw bytes.
+
+        :returns: tuple of metadata, data
+            metadata - information about the frame
+            data - 2D array representing the image data
+        """
         frame = json.loads(series_data)
         dtype = numpy.dtype(frame['type'])
         shape = frame['shape'][::-1]
         size = numpy.prod(shape)
         dtype = dtype.newbyteorder(frame['encoding'][-1]) if frame['encoding'][-1] in ['<', '>'] else dtype
         frame_number = int(info['frame']) + 1
-        self.header.update({
+        metadata = {
+            'data_series': frame['series'],
             'saturated_value': 1e6,
             'overloads': 0,
             'frame_number': frame_number,
-            'filename': 'Stream',
-            'name': 'Stream',
+            'filename': f"{self.name}-{frame['series']}",
+            'name': f"{self.name}-{frame['series']}",
             'start_angle': self._start_angle + frame_number * self.header['delta_angle'],
-        })
+        }
 
         try:
             if frame['encoding'].startswith('lz4'):
@@ -106,21 +155,10 @@ class EigerStream(DataSet):
                 mdata = bshuf.decompress_lz4(img_data[12:], shape, dtype)
             else:
                 raise RuntimeError(f'Unknown encoding {frame["encoding"]}')
-
             data = mdata.view(TYPES[frame['type']])
-            stats_data = data[(data >= 0) & (data < self.header['saturated_value'])]
-            avg, stdev = numpy.ravel(cv2.meanStdDev(stats_data))
-
-            self.header.update({
-                'average_intensity': avg,
-                'std_dev': stdev,
-                'min_intensity': stats_data.min(),
-                'max_intensity': stats_data.max(),
-            })
-            self.data = data
-            self.stats_data = stats_data
 
         except Exception as e:
+            data = None
             logger.error(f'Error decoding stream: {e}')
 
-
+        return metadata, data
