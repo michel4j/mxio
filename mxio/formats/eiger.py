@@ -2,6 +2,7 @@ import cv2
 import lz4.block
 import lz4.frame
 import numpy
+import json
 from ..misc import bshuf
 from . import DataSet
 from ..log import get_module_logger
@@ -55,7 +56,8 @@ class EigerStream(DataSet):
         # dummy method, does nothing for Eiger Stream
         pass
 
-    def read_header(self, header):
+    def read_header(self, header_data):
+        header = json.loads(header_data)
         metadata = {}
         for key, field in HEADER_FIELDS.items():
             converter = CONVERTERS.get(key, lambda v: v)
@@ -78,7 +80,8 @@ class EigerStream(DataSet):
                 break
         self.header = metadata
 
-    def read_image(self, info, frame, img_data):
+    def read_image(self, info, series_data, img_data):
+        frame = json.loads(series_data)
         dtype = numpy.dtype(frame['type'])
         shape = frame['shape'][::-1]
         size = numpy.prod(shape)
