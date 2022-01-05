@@ -1,10 +1,9 @@
 import os
 import re
-import pytz
 from datetime import datetime
 
 import numpy
-
+import pytz
 
 
 def stretch(gamma):
@@ -29,14 +28,15 @@ def file_sequences(filename):
     """
 
     directory, filename = os.path.split(os.path.abspath(filename))
-    p1 = re.compile('^(?P<root_name>[\w_-]+?)(?P<separator>(?:[._-])?)(?P<field>\d{3,12})(?P<extension>(?:\.[^\d][\w]+)?)$')
+    p1 = re.compile(
+        '^(?P<root_name>[\w_-]+?)(?P<separator>(?:[._-])?)(?P<field>\d{3,12})(?P<extension>(?:\.[^\d][\w]+)?)$')
 
     m = p1.match(filename)
     if m:
         params = m.groupdict()
         files = os.listdir(directory)
         width = len(params['field'])
-        current =  int(params['field'])
+        current = int(params['field'])
         regex = '^{root_name}{separator}(\d{{{width}}}){extension}$'.format(width=width, **params)
         p2 = re.compile(regex)
         frames = [int(m.group(1)) for f in files for m in [p2.match(f)] if m]
@@ -50,7 +50,7 @@ def file_sequences(filename):
             'name': name,
             'label': params['root_name'],
             'directory': directory,
-            'template': template.format(field='?'*width),
+            'template': template.format(field='?' * width),
             'regex': regex,
             'reference': name.format(sequence[0]),
             'sequence': sequence,
@@ -64,5 +64,3 @@ def image_histogram(data):
     Calculate and return the bins and edges histogram for the provided data
     """
     return numpy.histogram(data, density=False)
-
-
