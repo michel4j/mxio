@@ -51,6 +51,7 @@ CONVERTERS = {
 class EigerStream(DataSet):
     def __init__(self):
         super().__init__()
+        self._start_angle = 0.0
 
     def read_dataset(self):
         # dummy method, does nothing for Eiger Stream
@@ -78,6 +79,7 @@ class EigerStream(DataSet):
                 metadata['num_images'] = header['nimages']*header['ntrigger']
                 metadata['total_angle'] = metadata['num_images'] * metadata['delta_angle']
                 break
+        self._start_angle = metadata['start_angle']
         self.header = metadata
 
     def read_image(self, info, series_data, img_data):
@@ -93,7 +95,7 @@ class EigerStream(DataSet):
             'frame_number': frame_number,
             'filename': 'Stream',
             'name': 'Stream',
-            'start_angle': self.header['start_angle'] + frame_number * self.header['delta_angle'],
+            'start_angle': self._start_angle + frame_number * self.header['delta_angle'],
         })
 
         try:
