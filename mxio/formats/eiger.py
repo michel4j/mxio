@@ -127,7 +127,7 @@ class EigerStream(DataSet):
             data - 2D array representing the image data
         """
 
-        info = json.load(message[0])
+        info = json.loads(message[0])
         frame = json.loads(message[1])
         img_data = message[2]
 
