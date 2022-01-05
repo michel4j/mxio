@@ -6,3 +6,4 @@ pytz
 pyyaml
 numpy
 iso8601
+lz4

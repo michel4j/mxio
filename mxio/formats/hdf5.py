@@ -5,9 +5,9 @@ from pathlib import Path
 from datetime import datetime
 
 import cv2
-import hdf5plugin
 import iso8601
 import h5py
+import hdf5plugin
 import numpy
 import pytz
 

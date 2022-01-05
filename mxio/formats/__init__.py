@@ -18,16 +18,16 @@ class DataSet(object):
         self.stats_data = None
 
     def read_dataset(self):
-        raise NotImplementedError('Not implemented!')
+        pass
 
     def next_frame(self):
-        raise NotImplementedError('Not implemented!')
+        pass
 
     def prev_frame(self):
-        raise NotImplementedError('Not implemented!')
+        pass
 
     def get_frame(self, index=1):
-        raise NotImplementedError('Not implemented!')
+        pass
 
 
 @lru_cache(maxsize=None)

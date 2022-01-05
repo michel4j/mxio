@@ -6,6 +6,7 @@ from datetime import datetime
 import numpy
 
 
+
 def stretch(gamma):
     lut = (gamma * numpy.arange(65536)).astype(numpy.uint)
     lut[lut > 254] = 254
@@ -63,3 +64,5 @@ def image_histogram(data):
     Calculate and return the bins and edges histogram for the provided data
     """
     return numpy.histogram(data, density=False)
+
+
