@@ -60,13 +60,13 @@ class EigerStream(DataSet):
         # dummy method, does nothing for Eiger Stream
         pass
 
-    def read_header(self, header_data):
+    def read_header(self, message):
         """
         Read header information from Eiger Stream and update dataset header
 
-        :param header_data:  bytes, second item in multipart message received from Eiger stream, of htype 'dheader-1.0'
+        :param message:  multipart message of htype 'dheader-1.0'
         """
-        header = json.loads(header_data)
+        header = json.loads(message[1])
         metadata = {}
         for key, field in HEADER_FIELDS.items():
             converter = CONVERTERS.get(key, lambda v: v)
@@ -90,16 +90,13 @@ class EigerStream(DataSet):
         self._start_angle = metadata['start_angle']
         self.header = metadata
 
-    def read_image(self, info, series_data, img_data):
+    def read_image(self, message):
         """
         Read image information from Eiger Stream and update dataset data
 
-        :param info:  dictionary, of message header with htype='dimage-1.0'
-        :param series_data: bytes, second item of message obtained from Stream. Raw bytes
-        :param image_data: bytes, third item of message obtained from Stream. Raw bytes.
-
+        :param message:  multipart message from stream of htype='dimage-1.0'
         """
-        metadata, data = self.parse_image(info, series_data, img_data)
+        metadata, data = self.parse_image(message)
         self.header.update(metadata)
         stats_data = data[(data >= 0) & (data < metadata['saturated_value'])]
 
@@ -119,19 +116,21 @@ class EigerStream(DataSet):
         self.stats_data = stats_data
         self.header.update(metadata)
 
-    def parse_image(self, info, series_data, img_data):
+    def parse_image(self, message):
         """
         Parse image information from Eiger Stream without updating internal state
 
-        :param info:  dictionary, of message header with htype='dimage-1.0'
-        :param series_data: bytes, second item of message obtained from Stream. Raw bytes
-        :param img_data: bytes, third item of message obtained from Stream. Raw bytes.
+        :param message:  multipart message from stream of htype='dimage-1.0'
 
         :returns: tuple of metadata, data
             metadata - information about the frame
             data - 2D array representing the image data
         """
-        frame = json.loads(series_data)
+
+        info = json.load(message[0])
+        frame = json.loads(message[1])
+        img_data = message[2]
+
         dtype = numpy.dtype(frame['type'])
         shape = frame['shape'][::-1]
         size = numpy.prod(shape)
