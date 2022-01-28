@@ -348,10 +348,14 @@ class CBFDataSet(DataSet):
 
         self.data = self.raw_data.view(numpy.int32)
         stats_subset = self.data[:self.data.shape[0] // 2, :self.data.shape[1] // 2]
-        valid = (stats_subset > 0) & (stats_subset <= self.header['saturated_value'])
+        valid = (stats_subset >= 0) & (stats_subset < self.header['saturated_value'])
         self.stats_data = stats_subset[valid]
 
+        if valid.sum() == 0:
+            self.stats_data = stats_subset
+
         self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.stats_data))
+
         self.header['min_intensity'] = self.stats_data.min()
         self.header['max_intensity'] = self.stats_data.max()
         self.header['overloads'] = 4 * (self.stats_data == self.header['saturated_value']).sum()
