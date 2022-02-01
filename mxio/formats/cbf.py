@@ -268,7 +268,7 @@ def read_cbf(filename, with_image=True):
         res |= cbflib.cbf_find_column(handle, b"header_contents")
         hdr_contents = ct.c_char_p()
         res |= cbflib.cbf_get_value(handle, ct.byref(hdr_contents))
-        if res == 0 and hdr_type.value != 'XDS special':
+        if res == 0 and hdr_type.value != b'XDS special':
             logger.debug('miniCBF header type found: {}'.format(hdr_type.value))
             info = parser.parse_text((hdr_contents.value).decode(), (hdr_type.value).decode())
             header['detector_type'] = info['detector'].lower().strip().replace(' ', '')

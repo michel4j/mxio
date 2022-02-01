@@ -42,7 +42,9 @@ HEADERS = {
         'date': '/entry/start_time',
         'distance': '/entry/instrument/detector/detector_distance',
         'beam_center': ('/entry/instrument/detector/beam_center_x', '/entry/instrument/detector/beam_center_y'),
-        'saturated_value': '/entry/instrument/detector/saturation_value',
+
+
+        
         'energy': '/entry/instrument/beam/incident_wavelength',
         'sensor_thickness': '/entry/instrument/detector/sensor_thickness',
         'detector_size': ('/entry/instrument/detector/detectorSpecific/x_pixels_in_detector',
@@ -206,11 +208,11 @@ class HDF5DataSet(DataSet):
         # NXmx data names don't match file pattern 'data_' prefix is missing
         if self.ref_section:
              self.current_section = f'{self.section_prefix}{self.ref_section}'
-             self.current_frame = self.sections[self.current_section][0]
+             self.current_frame = int(self.sections[self.current_section][0])
         else:
             if self.current_frame is None:
                 self.current_section = self.section_names[0]
-                self.current_frame = self.sections[self.current_section][0]
+                self.current_frame = int(self.sections[self.current_section][0])
             else:
                 for section_name, section_limits in self.sections.items():
                     if section_limits[0] <= self.current_frame <= section_limits[1]:
@@ -228,14 +230,14 @@ class HDF5DataSet(DataSet):
                     # found the right axis
                     self.header['rotation_axis'] = axis
                     for field, path in OSCILLATION_FIELDS[self.hdf_type].items():
-                        self.header[f'{field}_angle'] = self.raw[path.format(axis)][()]
+                        self.header[f'{field}_angle'] = float(self.raw[path.format(axis)][()])
 
                     # start angles are always sequences
                     self.header['start_angle'] = self.start_angles[0]
 
                     if self.hdf_type == 'NXmx':
-                        self.header['total_angle'] = numpy.sum(self.header['delta_angle'])
-                        self.header['delta_angle'] = self.header['delta_angle'][0]
+                        self.header['total_angle'] = float(numpy.sum(self.header['delta_angle']))
+                        self.header['delta_angle'] = float(self.header['delta_angle'][0])
 
                     break
             except KeyError:
