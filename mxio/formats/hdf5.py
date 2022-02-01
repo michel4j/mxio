@@ -167,7 +167,7 @@ class HDF5DataSet(DataSet):
             self.root_name = os.path.splitext(filename)[0]
 
         self.name = self.root_name
-        self.raw = h5py.File(self.master_file, 'r')
+        self.raw = h5py.File(self.master_file, 'r', libver="latest", swmr=True)
         self.mask = None
         self.data = None
         self.read_dataset()
