@@ -39,7 +39,7 @@ CONVERTERS = {
     'pixel_size': lambda v: float(v) * 1000,
     'exposure_time': float,
     'wavelength': float,
-    'distance': float,
+    'distance': lambda v: float(v) * 1000,
     'beam_center': float,
     'saturated_value': int,
     'num_frames': int,

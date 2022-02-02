@@ -42,9 +42,6 @@ HEADERS = {
         'date': '/entry/start_time',
         'distance': '/entry/instrument/detector/detector_distance',
         'beam_center': ('/entry/instrument/detector/beam_center_x', '/entry/instrument/detector/beam_center_y'),
-
-
-        
         'energy': '/entry/instrument/beam/incident_wavelength',
         'sensor_thickness': '/entry/instrument/detector/sensor_thickness',
         'detector_size': ('/entry/instrument/detector/detectorSpecific/x_pixels_in_detector',
