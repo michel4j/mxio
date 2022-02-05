@@ -197,22 +197,22 @@ class HDF5DataSet(DataSet):
         self.header['format'] = self.hdf_type
         self.header['filename'] = os.path.basename(self.master_file)
 
-
         # try to find oscillation axis and parameters as first non-zero average
         oscillation_fields = OSCILLATION_FIELDS[self.hdf_type]
 
         for axis in ['omega', 'phi', 'chi', 'kappa']:
             try:
                 self.start_angles = self.raw[oscillation_fields['start'].format(axis)][()]
-                if len(self.start_angles) < 2: continue
+                if len(self.start_angles) < 2:
+                    continue
                 if self.start_angles.mean() != 0.0 and numpy.diff(self.start_angles).sum() != 0:
                     # found the right axis
                     self.header['rotation_axis'] = axis
                     for field, path in OSCILLATION_FIELDS[self.hdf_type].items():
-                        self.header[f'{field}_angle'] = float(self.raw[path.format(axis)][()])
+                        self.header[f'{field}_angle'] = self.raw[path.format(axis)][()]
 
                     # start angles are always sequences
-                    self.header['start_angle'] = self.start_angles[0]
+                    self.header['start_angle'] = float(self.start_angles[0])
 
                     if self.hdf_type == 'NXmx':
                         self.header['total_angle'] = float(numpy.sum(self.header['delta_angle']))
@@ -232,7 +232,7 @@ class HDF5DataSet(DataSet):
         section_frames = frames.reshape((num_sections, -1))
 
         self.sections = {
-            self.section_names[i]: (f[0], min([-1], num_frames))
+            self.section_names[i]: (f[0], min(f[-1], num_frames))
             for i, f in enumerate(section_frames)
         }
 
