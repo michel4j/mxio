@@ -284,7 +284,7 @@ class HDF5DataSet(DataSet):
         if path.exists():
             # wait for file to be written, up to 10 seconds. Assume mtime > 0.1 sec means done writing
             end_time = time.time() + 10
-            while path.stat().st_mtime - time.time() < 0.1 and time.time() < end_time:
+            while time.time() - path.stat().st_mtime < 0.1 and time.time() < end_time:
                 time.sleep(0.1)
 
             section = self.raw[key]
