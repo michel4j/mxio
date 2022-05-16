@@ -7,3 +7,4 @@ pyyaml
 numpy
 iso8601
 lz4
+pyzmq

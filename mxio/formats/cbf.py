@@ -12,7 +12,8 @@ from ..log import get_module_logger
 # Configure Logging
 logger = get_module_logger('mxio')
 
-# Define CBF Error Code constants
+# Define CBF constants
+CBF        =     0x0000
 CBF_FORMAT = 0x00000001  # 1
 CBF_ALLOC = 0x00000002  # 2
 CBF_ARGUMENT = 0x00000004  # 4
@@ -32,6 +33,7 @@ CBF_OVERFLOW = 0x00008000  # 32768
 CBF_UNDEFINED = 0x00010000  # 65536
 CBF_NOTIMPLEMENTED = 0x00020000  # 131072
 CBF_NOCOMPRESSION = 0x00040000  # 262144
+CBF_BYTE_OFFSET = 0x0070
 
 PLAIN_HEADERS = 0x0001  # Use plain ASCII headers
 MIME_HEADERS = 0x0002  # Use MIME headers
@@ -143,6 +145,16 @@ cbflib.cbf_find_category.argtypes = [ct.c_void_p, ct.c_char_p]
 cbflib.cbf_find_column.argtypes = [ct.c_void_p, ct.c_char_p]
 cbflib.cbf_datablock_name.argtypes = [ct.c_void_p, ct.c_void_p]
 cbflib.cbf_get_overload.argtypes = [ct.c_void_p, ct.c_uint, ct.POINTER(ct.c_double)]
+
+cbflib.cbf_new_datablock.argtypes = [ct.c_void_p, ct.c_char_p]
+cbflib.cbf_new_category.argtypes = [ct.c_void_p, ct.c_char_p]
+cbflib.cbf_new_column.argtypes = [ct.c_void_p, ct.c_char_p]
+cbflib.cbf_set_value.argtypes = [ct.c_void_p, ct.c_char_p]
+cbflib.cbf_set_integerarray_wdims.argtypes = [
+    ct.c_void_p, ct.c_uint , ct.c_int, ct.c_void_p, ct.c_size_t, ct.c_int,
+    ct.c_size_t, ct.c_char_p, ct.c_size_t, ct.c_size_t, ct.c_size_t, ct.c_size_t
+]
+cbflib.cbf_write_file.argtypes = [ct.c_void_p, ct.c_void_p, ct.c_int, ct.c_int, ct.c_int, ct.c_int]
 
 
 def get_max_int(t):
@@ -406,6 +418,63 @@ class CBFDataSet(DataSet):
                 prev_frame = self.header['dataset']['sequence'][prev_pos]
                 return self.get_frame(prev_frame)
         return False
+
+
+
+def write_minicbf(filename: str, header: dict, image: numpy.ndarray):
+
+    header_content = (
+      "\n"
+      "# Detector: {detector_type}, S/N {serial_number}\n"
+      "# Pixel_size {pixel_size}e-6 m x {pixel_size}e-6 m\n"
+      "# Silicon sensor, thickness {sensor_thickness}f m\n"
+      "# Exposure_time {exposure_time} s\n"
+      "# Exposure_period {exposure_time} s\n"
+      "# Count_cutoff {saturated_value} counts\n"
+      "# Wavelength {wavelength} A\n"
+      "# Detector_distance {distance} m\n"
+      "# Beam_xy ({beam_center[0]}, {beam_center[1]}) pixels\n"
+      "# Start_angle {start_angle} deg.\n"
+      "# Angle_increment {delta_angle} deg.\n"
+    ).format(**header)
+
+    # create CBF handle
+    cbf = ct.c_void_p()
+    cbflib.cbf_make_handle(ct.byref(cbf))
+    cbflib.cbf_new_datablock(cbf, b"image_1")
+    fh = libc.fopen(filename.encode('utf-8'), b"wb")
+
+    # Write miniCBF header
+    cbflib.cbf_new_category(cbf, b"array_data")
+    cbflib.cbf_new_column(cbf, b"header_convention")
+    cbflib.cbf_set_value(cbf, b"SLS_1.0")
+    cbflib.cbf_new_column(cbf, b"header_contents")
+    cbflib.cbf_set_value(cbf, header_content.encode('utf-8'))
+
+    # Write the image data
+    cbflib.cbf_new_category(cbf, "array_data")
+    cbflib.cbf_new_column(cbf, "data")
+
+    xpixels, ypixels = header["detector_size"]
+    data = ct.create_string_buffer(image.tobytes())
+    cbflib.cbf_set_integerarray_wdims(
+        cbf,
+        CBF_BYTE_OFFSET,
+        1, # binary id
+        ct.byref(data),
+        ct.c_size_t(image.itemsize),
+        1, # signed
+        xpixels * ypixels,
+        b"little_endian",
+        ct.c_size_t(xpixels),
+        ct.c_size_t(ypixels),
+        0,
+        0
+    )
+    cbflib.cbf_write_file(cbf, fh, 1, CBF, MSG_DIGEST | MIME_HEADERS | PAD_4K, 0)
+    cbflib.cbf_free_handle(cbf)
+
+
 
 
 __all__ = ['CBFDataSet']

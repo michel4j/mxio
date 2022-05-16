@@ -1,4 +1,5 @@
 import json
+import zmq
 
 import cv2
 import lz4.block
@@ -161,3 +162,27 @@ class EigerStream(DataSet):
             logger.error(f'Error decoding stream: {e}')
 
         return metadata, data
+
+
+def multiplexer(address, port):
+    """
+    Proxies the PUSH/PULL Stream from address and publishes it as a PUB/SUB Stream through port.
+    This allows multiple ZMQ clients to access the same data.
+    """
+
+    try:
+        context = zmq.Context()
+        backend = context.socket(zmq.PULL)
+        backend.connect(address)
+        frontend = context.socket(zmq.PUB)
+        frontend.bind(f"tcp://*:{port}")
+
+        print(f'Starting ZMQ PULL Multiplexer proxying messages from {address} to {port} ...')
+        zmq.device(zmq.STREAMER, frontend, backend)
+    except Exception as e:
+        pass
+    finally:
+        frontend.close()
+        backend.close()
+        context.term()
+
