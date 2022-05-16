@@ -1,6 +1,7 @@
 import itertools
 import os
 import re
+import time
 from pathlib import Path
 from datetime import datetime
 
@@ -42,9 +43,6 @@ HEADERS = {
         'date': '/entry/start_time',
         'distance': '/entry/instrument/detector/detector_distance',
         'beam_center': ('/entry/instrument/detector/beam_center_x', '/entry/instrument/detector/beam_center_y'),
-
-
-        
         'energy': '/entry/instrument/beam/incident_wavelength',
         'sensor_thickness': '/entry/instrument/detector/sensor_thickness',
         'detector_size': ('/entry/instrument/detector/detectorSpecific/x_pixels_in_detector',
@@ -169,7 +167,7 @@ class HDF5DataSet(DataSet):
             self.root_name = os.path.splitext(filename)[0]
 
         self.name = self.root_name
-        self.raw = h5py.File(self.master_file, 'r', libver="latest", swmr=True)
+        self.raw = h5py.File(self.master_file, 'r')
         self.mask = None
         self.data = None
         self.read_dataset()
@@ -199,12 +197,49 @@ class HDF5DataSet(DataSet):
         self.header['format'] = self.hdf_type
         self.header['filename'] = os.path.basename(self.master_file)
 
-        self.sections = {}
-        for name, d in self.raw['/entry/data'].items():
-            if d is not None and name.startswith('data_'):
-                self.sections[name] = (d.attrs['image_nr_low'], d.attrs['image_nr_high'])
+        # try to find oscillation axis and parameters as first non-zero average
+        oscillation_fields = OSCILLATION_FIELDS[self.hdf_type]
 
-        self.section_names = sorted(self.sections.keys())
+        for axis in ['omega', 'phi', 'chi', 'kappa']:
+            try:
+                self.start_angles = self.raw[oscillation_fields['start'].format(axis)][()]
+                if len(self.start_angles) < 2:
+                    continue
+                if self.start_angles.mean() != 0.0 and numpy.diff(self.start_angles).sum() != 0:
+                    # found the right axis
+                    self.header['rotation_axis'] = axis
+                    for field, path in OSCILLATION_FIELDS[self.hdf_type].items():
+                        self.header[f'{field}_angle'] = self.raw[path.format(axis)][()]
+
+                    # start angles are always sequences
+                    self.header['start_angle'] = float(self.start_angles[0])
+
+                    if self.hdf_type == 'NXmx':
+                        self.header['total_angle'] = float(numpy.sum(self.header['delta_angle']))
+                        self.header['delta_angle'] = float(self.header['delta_angle'][0])
+
+                    break
+            except KeyError:
+                pass
+
+        self.section_names = list(self.raw['/entry/data'].keys())
+
+        # guess frame number ranges from number sections instead of reading external links
+        num_frames = len(self.raw['/entry/sample/goniometer/omega'][()])
+        num_sections = len(self.section_names)
+        max_frames_per_section = int(numpy.ceil(num_frames/num_sections))
+        frames = numpy.arange(max_frames_per_section * num_sections) + 1
+        section_frames = frames.reshape((num_sections, -1))
+
+        self.sections = {
+            self.section_names[i]: (f[0], min(f[-1], num_frames))
+            for i, f in enumerate(section_frames)
+        }
+
+        # for name, d in self.raw['/entry/data'].items():
+        #     if d is not None and name.startswith('data_'):
+        #         self.sections[name] = (d.attrs['image_nr_low'], d.attrs['image_nr_high'])
+
         # NXmx data names don't match file pattern 'data_' prefix is missing
         if self.ref_section:
              self.current_section = f'{self.section_prefix}{self.ref_section}'
@@ -219,31 +254,6 @@ class HDF5DataSet(DataSet):
                         self.current_section = section_name
                         break
 
-        # try to find oscillation axis and parameters as first non-zero average
-        oscillation_fields = OSCILLATION_FIELDS[self.hdf_type]
-
-        for axis in ['omega', 'phi', 'chi', 'kappa']:
-            try:
-                self.start_angles = self.raw[oscillation_fields['start'].format(axis)][()]
-                if len(self.start_angles) < 2: continue
-                if self.start_angles.mean() != 0.0 and numpy.diff(self.start_angles).sum() != 0:
-                    # found the right axis
-                    self.header['rotation_axis'] = axis
-                    for field, path in OSCILLATION_FIELDS[self.hdf_type].items():
-                        self.header[f'{field}_angle'] = float(self.raw[path.format(axis)][()])
-
-                    # start angles are always sequences
-                    self.header['start_angle'] = self.start_angles[0]
-
-                    if self.hdf_type == 'NXmx':
-                        self.header['total_angle'] = float(numpy.sum(self.header['delta_angle']))
-                        self.header['delta_angle'] = float(self.header['delta_angle'][0])
-
-                    break
-            except KeyError:
-                pass
-
-        frames = list(itertools.chain.from_iterable(range(v[0], v[1] + 1) for v in self.sections.values()))
         width = 6
         template = '{root_name}_{{field}}.h5'.format(root_name=self.root_name)
         prefix = {'HDF5': 'data_', 'NXmx': ''}[self.hdf_type]
@@ -259,7 +269,7 @@ class HDF5DataSet(DataSet):
             'sequence': frames,
             'current': self.current_frame
         }
-        self.read_image()
+        return self.read_image()
 
     def read_image(self):
         if self.mask is None:
@@ -267,23 +277,34 @@ class HDF5DataSet(DataSet):
                 self.raw['/entry/instrument/detector/detectorSpecific/pixel_mask'][()].view(bool)
             )
 
-        section = self.raw['/entry/data/{}'.format(self.current_section)]
-        frame_index = max(self.current_frame - self.sections[self.current_section][0], 0)
-        raw_data = section[frame_index]
-        data_type = NUMBER_FORMATS[str(raw_data.dtype)]
-        data = raw_data.view(data_type)
+        folder = Path(self.directory)
+        key = f'/entry/data/{self.current_section}'
+        path = folder.joinpath(f'{self.root_name}_{self.current_section}.h5')
 
-        # use a  quarter of the image as a subset of data or fast analysis
-        stats_subset = data[:data.shape[0]//2, :data.shape[1]//2]
-        valid = self.mask[:data.shape[0]//2, :data.shape[1]//2]
-        self.stats_data = stats_subset[valid]
+        if path.exists():
+            # wait for file to be written, up to 10 seconds. Assume mtime > 0.1 sec means done writing
+            end_time = time.time() + 10
+            while time.time() - path.stat().st_mtime < 0.1 and time.time() < end_time:
+                time.sleep(0.1)
 
-        self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.stats_data))
-        self.header['min_intensity'] = 0
-        self.header['max_intensity'] = float(self.stats_data.max())  # Estimate
-        self.header['overloads'] = 4*(self.stats_data == self.header['saturated_value']).sum()  # Fast estimate
-        self.header['frame_number'] = self.current_frame
-        self.data = data
+            section = self.raw[key]
+            frame_index = max(self.current_frame - self.sections[self.current_section][0], 0)
+            raw_data = section[frame_index]
+            data_type = NUMBER_FORMATS[str(raw_data.dtype)]
+            data = raw_data.view(data_type)
+
+            # use a  quarter of the image as a subset of data or fast analysis
+            stats_subset = data[:data.shape[0]//2, :data.shape[1]//2]
+            valid = self.mask[:data.shape[0]//2, :data.shape[1]//2]
+            self.stats_data = stats_subset[valid]
+
+            self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.stats_data))
+            self.header['min_intensity'] = 0
+            self.header['max_intensity'] = float(self.stats_data.max())  # Estimate
+            self.header['overloads'] = 4*(self.stats_data == self.header['saturated_value']).sum()  # Fast estimate
+            self.header['frame_number'] = self.current_frame
+            self.data = data
+            return True
 
     def get_frame(self, index=1):
         """
@@ -296,8 +317,7 @@ class HDF5DataSet(DataSet):
                 self.current_frame = index
                 self.current_section = section_name
                 self.header['start_angle'] = self.start_angles[self.current_frame-1]
-                self.read_image()
-                return True
+                return self.read_image()
         return False
 
     def next_frame(self):
@@ -319,8 +339,7 @@ class HDF5DataSet(DataSet):
             else:
                 return False
         self.header['start_angle'] = float(self.start_angles[self.current_frame - 1])
-        self.read_image()
-        return True
+        return self.read_image()
 
     def prev_frame(self):
         """Load the previous frame in the dataset"""
@@ -342,8 +361,7 @@ class HDF5DataSet(DataSet):
             else:
                 return False
         self.header['start_angle'] = self.start_angles[self.current_frame - 1]
-        self.read_image()
-        return True
+        return self.read_image()
 
 
 __all__ = ['HDF5DataSet']
