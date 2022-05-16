@@ -420,23 +420,31 @@ class CBFDataSet(DataSet):
         return False
 
 
-
 def write_minicbf(filename: str, header: dict, image: numpy.ndarray):
+    info  = {}
+    info.update(header)
 
-    header_content = (
+    info["distance"] /= 1000.
+    info["sensor_thickness"] /= 1000.
+    info["pixel_size"] *= 1000.
+    header_text = (
       "\n"
       "# Detector: {detector_type}, S/N {serial_number}\n"
-      "# Pixel_size {pixel_size}e-6 m x {pixel_size}e-6 m\n"
-      "# Silicon sensor, thickness {sensor_thickness}f m\n"
-      "# Exposure_time {exposure_time} s\n"
-      "# Exposure_period {exposure_time} s\n"
+      "# Pixel_size {pixel_size:0.0f}e-6 m x {pixel_size:0.0f}e-6 m\n"
+      "# Silicon sensor, thickness {sensor_thickness:0.6f} m\n"
+      "# Exposure_time {exposure_time:0.7f} s\n"
+      "# Exposure_period {exposure_period:0.7f} s\n"
       "# Count_cutoff {saturated_value} counts\n"
-      "# Wavelength {wavelength} A\n"
-      "# Detector_distance {distance} m\n"
+      "# Wavelength {wavelength:0.5f} A\n"
+      "# Flux 0.000000\n"
+      "# Filter_transmission 1.0000\n"
+      "# Detector_distance {distance:0.5f} m\n"
       "# Beam_xy ({beam_center[0]}, {beam_center[1]}) pixels\n"
-      "# Start_angle {start_angle} deg.\n"
-      "# Angle_increment {delta_angle} deg.\n"
-    ).format(**header)
+      "# Start_angle {start_angle:0.4f} deg.\n"
+      "# Angle_increment {delta_angle:0.4f} deg.\n"
+      "# Detector_2theta {two_theta:0.4f} deg.\n"
+    ).format(**info).encode('utf-8')
+    header_content = header_text + (4096-len(header_text))*b'\0'    # pad header to 4096 bytes
 
     # create CBF handle
     cbf = ct.c_void_p()
@@ -447,15 +455,15 @@ def write_minicbf(filename: str, header: dict, image: numpy.ndarray):
     # Write miniCBF header
     cbflib.cbf_new_category(cbf, b"array_data")
     cbflib.cbf_new_column(cbf, b"header_convention")
-    cbflib.cbf_set_value(cbf, b"SLS_1.0")
+    cbflib.cbf_set_value(cbf, b"PILATUS_1.2")
     cbflib.cbf_new_column(cbf, b"header_contents")
-    cbflib.cbf_set_value(cbf, header_content.encode('utf-8'))
+    cbflib.cbf_set_value(cbf, header_content)
 
     # Write the image data
-    cbflib.cbf_new_category(cbf, "array_data")
-    cbflib.cbf_new_column(cbf, "data")
+    cbflib.cbf_new_category(cbf, b"array_data")
+    cbflib.cbf_new_column(cbf, b"data")
 
-    xpixels, ypixels = header["detector_size"]
+    xpixels, ypixels = info["detector_size"]
     data = ct.create_string_buffer(image.tobytes())
     cbflib.cbf_set_integerarray_wdims(
         cbf,
