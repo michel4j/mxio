@@ -25,9 +25,11 @@ TYPES = {
 
 HEADER_FIELDS = {
     'detector_type': 'description',
+    'serial_number': 'detector_number',
     'two_theta': 'two_theta_start',
     'pixel_size': 'x_pixel_size',
-    'exposure_time': 'frame_time',
+    'exposure_time': 'count_time',
+    'exposure_period': 'frame_time',
     'wavelength': 'wavelength',
     'distance': 'detector_distance',
     'beam_center': ('beam_center_x', 'beam_center_y'),

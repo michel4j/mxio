@@ -434,7 +434,7 @@ def write_minicbf(filename: str, header: dict, image: numpy.ndarray):
       "# Silicon sensor, thickness {sensor_thickness:0.6f} m\n"
       "# Exposure_time {exposure_time:0.7f} s\n"
       "# Exposure_period {exposure_period:0.7f} s\n"
-      "# Count_cutoff {saturated_value} counts\n"
+      "# Count_cutoff {saturated_value:0.0f} counts\n"
       "# Wavelength {wavelength:0.5f} A\n"
       "# Flux 0.000000\n"
       "# Filter_transmission 1.0000\n"
