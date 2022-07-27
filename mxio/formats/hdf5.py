@@ -1,14 +1,13 @@
-import itertools
 import os
 import re
 import time
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 import cv2
-import iso8601
 import h5py
 import hdf5plugin
+import iso8601
 import numpy
 import pytz
 
