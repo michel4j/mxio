@@ -86,7 +86,7 @@ CONVERTERS = {
     'detector_type': lambda v: v.decode('utf-8'),
     'serial_number': lambda v: v.decode('utf-8'),
     'date': convert_date,
-    'two_theta': lambda v: float(v[0]),
+    'two_theta': lambda v: float(v),
     'pixel_size': lambda v: float(v)*1000,
     'exposure_time': float,
     'exposure_period': float,
