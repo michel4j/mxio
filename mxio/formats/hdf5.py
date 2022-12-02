@@ -23,7 +23,7 @@ HEADERS = {
         'two_theta': '/entry/instrument/detector/goniometer/two_theta',
         'pixel_size': '/entry/instrument/detector/x_pixel_size',
         'exposure_time': '/entry/instrument/detector/count_time',
-        'exposure_period':  '/entry/instrument/detector/frame_time',
+        'exposure_period': '/entry/instrument/detector/frame_time',
         'wavelength': '/entry/instrument/beam/incident_wavelength',
         'date': '/entry/instrument/detector/detectorSpecific/data_collection_date',
         'distance': '/entry/instrument/detector/detector_distance',
@@ -31,7 +31,7 @@ HEADERS = {
         'saturated_value': '/entry/instrument/detector/detectorSpecific/countrate_correction_count_cutoff',
         'energy': '/entry/instrument/beam/incident_wavelength',
         'sensor_thickness': '/entry/instrument/detector/sensor_thickness',
-        'serial_number':  '/entry/instrument/detector/detector_number',
+        'serial_number': '/entry/instrument/detector/detector_number',
         'detector_size': ('/entry/instrument/detector/detectorSpecific/x_pixels_in_detector',
                           '/entry/instrument/detector/detectorSpecific/y_pixels_in_detector'),
     },
@@ -86,18 +86,22 @@ CONVERTERS = {
     'serial_number': lambda v: v.decode('utf-8'),
     'date': convert_date,
     'two_theta': lambda v: float(v[0]),
-    'pixel_size': lambda v: float(v)*1000,
+    'pixel_size': lambda v: float(v) * 1000,
     'exposure_time': float,
     'exposure_period': float,
     'wavelength': float,
-    'distance': lambda v: float(v)*1000,
+    'distance': lambda v: float(v) * 1000,
     'beam_center': float,
     'saturated_value': int,
     'num_frames': int,
     'energy': wavelength_to_energy,
-    'sensor_thickness': lambda v: float(v)*1000,
+    'sensor_thickness': lambda v: float(v) * 1000,
     'detector_size': int,
 }
+
+ARRAY_FIELDS = [
+    'two_theta', 'omega', 'chi', 'phi', 'kappa'
+]
 
 DEFAULTS = {
     'two_theta': 0.0
@@ -114,7 +118,6 @@ OSCILLATION_FIELDS = {
         'delta': '/entry/sample/transformations/{}_increment_set'
     },
 }
-
 
 NUMBER_FORMATS = {
     'uint16': numpy.int16,
@@ -175,6 +178,13 @@ class HDF5DataSet(DataSet):
         self.data = None
         self.read_dataset()
 
+    def extract_field(self, field, array=False):
+        field_value = self.raw[field]
+        raw_value = field_value[()]
+        if field_value.shape == () and array:
+            raw_value = numpy.array([raw_value])
+        return raw_value
+
     def read_dataset(self):
         self.header = {}
         try:
@@ -189,9 +199,12 @@ class HDF5DataSet(DataSet):
             converter = CONVERTERS.get(key, lambda v: v)
             try:
                 if not isinstance(field, (tuple, list)):
-                    self.header[key] = converter(self.raw[field][()])
+                    self.header[key] = converter(self.extract_field(field, array=(key in ARRAY_FIELDS)))
                 else:
-                    self.header[key] = tuple(converter(self.raw[sub_field][()]) for sub_field in field)
+                    self.header[key] = tuple(
+                        converter(self.extract_field(sub_field, array=(key in ARRAY_FIELDS)))
+                        for sub_field in field
+                    )
             except (ValueError, KeyError):
                 logger.warning('Field corresponding to {} not found!'.format(key))
                 self.header[key] = DEFAULTS.get(key)
@@ -205,14 +218,14 @@ class HDF5DataSet(DataSet):
 
         for axis in ['omega', 'phi', 'chi', 'kappa']:
             try:
-                self.start_angles = self.raw[oscillation_fields['start'].format(axis)][()]
-                if len(self.start_angles) < 2:
-                    continue
-                if self.start_angles.mean() != 0.0 and numpy.diff(self.start_angles).sum() != 0:
+                self.start_angles = self.extract_field(oscillation_fields['start'].format(axis), array=True)
+                value_varies = (self.start_angles.mean() != 0.0 and numpy.diff(self.start_angles).sum() != 0)
+                if len(self.start_angles) == 1 or value_varies:
                     # found the right axis
                     self.header['rotation_axis'] = axis
                     for field, path in OSCILLATION_FIELDS[self.hdf_type].items():
-                        self.header[f'{field}_angle'] = self.raw[path.format(axis)][()]
+                        print(field, path.format(axis))
+                        self.header[f'{field}_angle'] = self.extract_field(path.format(axis), array=True)
 
                     # start angles are always sequences
                     self.header['start_angle'] = float(self.start_angles[0])
@@ -228,9 +241,9 @@ class HDF5DataSet(DataSet):
         self.section_names = list(self.raw['/entry/data'].keys())
 
         # guess frame number ranges from number sections instead of reading external links
-        num_frames = len(self.raw['/entry/sample/goniometer/omega'][()])
+        num_frames = len(self.extract_field('/entry/sample/goniometer/omega', array=True))
         num_sections = len(self.section_names)
-        max_frames_per_section = int(numpy.ceil(num_frames/num_sections))
+        max_frames_per_section = int(numpy.ceil(num_frames / num_sections))
         frames = numpy.arange(max_frames_per_section * num_sections) + 1
         section_frames = frames.reshape((num_sections, -1))
 
@@ -245,8 +258,8 @@ class HDF5DataSet(DataSet):
 
         # NXmx data names don't match file pattern 'data_' prefix is missing
         if self.ref_section:
-             self.current_section = f'{self.section_prefix}{self.ref_section}'
-             self.current_frame = int(self.sections[self.current_section][0])
+            self.current_section = f'{self.section_prefix}{self.ref_section}'
+            self.current_frame = int(self.sections[self.current_section][0])
         else:
             if self.current_frame is None:
                 self.current_section = self.section_names[0]
@@ -277,7 +290,7 @@ class HDF5DataSet(DataSet):
     def read_image(self):
         if self.mask is None:
             self.mask = numpy.invert(
-                self.raw['/entry/instrument/detector/detectorSpecific/pixel_mask'][()].view(bool)
+                self.extract_field('/entry/instrument/detector/detectorSpecific/pixel_mask').view(bool)
             )
 
         folder = Path(self.directory)
@@ -290,21 +303,21 @@ class HDF5DataSet(DataSet):
             while time.time() - path.stat().st_mtime < 0.1 and time.time() < end_time:
                 time.sleep(0.1)
 
-            section = self.raw[key]
+            section = self.extract_field(key)
             frame_index = max(self.current_frame - self.sections[self.current_section][0], 0)
             raw_data = section[frame_index]
             data_type = NUMBER_FORMATS[str(raw_data.dtype)]
             data = raw_data.view(data_type)
 
             # use a  quarter of the image as a subset of data or fast analysis
-            stats_subset = data[:data.shape[0]//2, :data.shape[1]//2]
-            valid = self.mask[:data.shape[0]//2, :data.shape[1]//2]
+            stats_subset = data[:data.shape[0] // 2, :data.shape[1] // 2]
+            valid = self.mask[:data.shape[0] // 2, :data.shape[1] // 2]
             self.stats_data = stats_subset[valid]
 
             self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.stats_data))
             self.header['min_intensity'] = 0
             self.header['max_intensity'] = float(self.stats_data.max())  # Estimate
-            self.header['overloads'] = 4*(self.stats_data == self.header['saturated_value']).sum()  # Fast estimate
+            self.header['overloads'] = 4 * (self.stats_data == self.header['saturated_value']).sum()  # Fast estimate
             self.header['frame_number'] = self.current_frame
             self.data = data
             return True
@@ -319,7 +332,7 @@ class HDF5DataSet(DataSet):
             if section_limits[0] <= index <= section_limits[1]:
                 self.current_frame = index
                 self.current_section = section_name
-                self.header['start_angle'] = self.start_angles[self.current_frame-1]
+                self.header['start_angle'] = self.start_angles[self.current_frame - 1]
                 return self.read_image()
         return False
 
@@ -333,7 +346,7 @@ class HDF5DataSet(DataSet):
         else:
             # skip to first image of next section
             i = self.section_names.index(self.current_section) + 1
-            if i <= len(self.section_names)-1:
+            if i <= len(self.section_names) - 1:
                 next_section = self.section_names[i]
                 next_frame = self.sections[next_section][0]
 
