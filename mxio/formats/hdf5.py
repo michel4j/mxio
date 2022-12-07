@@ -37,7 +37,6 @@ HEADERS = {
     },
     'NXmx': {
         'detector_type': '/entry/instrument/detector/description',
-        'two_theta': '/entry/instrument/detector/goniometer/two_theta',
         'pixel_size': '/entry/instrument/detector/x_pixel_size',
         'exposure_time': '/entry/instrument/detector/count_time',
         'wavelength': '/entry/instrument/beam/incident_wavelength',
@@ -45,6 +44,7 @@ HEADERS = {
         'distance': '/entry/instrument/detector/detector_distance',
         'beam_center': ('/entry/instrument/detector/beam_center_x', '/entry/instrument/detector/beam_center_y'),
         'energy': '/entry/instrument/beam/incident_wavelength',
+        'saturated_value': '/entry/instrument/detector/saturation_value',
         'sensor_thickness': '/entry/instrument/detector/sensor_thickness',
         'detector_size': ('/entry/instrument/detector/detectorSpecific/x_pixels_in_detector',
                           '/entry/instrument/detector/detectorSpecific/y_pixels_in_detector'),
@@ -119,6 +119,11 @@ OSCILLATION_FIELDS = {
     },
 }
 
+OMEGA_FIELDS = {
+    'HDF5': '/entry/sample/goniometer/omega',
+    'NXmx': '/entry/sample/sample_omega/omega'
+}
+
 NUMBER_FORMATS = {
     'uint16': numpy.int16,
     'uint32': numpy.int32,
@@ -178,9 +183,9 @@ class HDF5DataSet(DataSet):
         self.data = None
         self.read_dataset()
 
-    def extract_field(self, field, array=False):
+    def extract_field(self, field, array=False, index=()):
         field_value = self.raw[field]
-        raw_value = field_value[()]
+        raw_value = field_value[index]
         if field_value.shape == () and array:
             raw_value = numpy.array([raw_value])
         return raw_value
@@ -224,14 +229,18 @@ class HDF5DataSet(DataSet):
                     # found the right axis
                     self.header['rotation_axis'] = axis
                     for field, path in OSCILLATION_FIELDS[self.hdf_type].items():
+                        values = self.extract_field(path.format(axis), array=True)
                         self.header[f'{field}_angle'] = self.extract_field(path.format(axis), array=True)
 
-                    # start angles are always sequences
-                    self.header['start_angle'] = float(self.start_angles[0])
-
+                    self.header['start_angle'] = float(self.header['start_angle'][0])
+                    self.header['delta_angle'] = float(self.header['delta_angle'][0])
                     if self.hdf_type == 'NXmx':
                         self.header['total_angle'] = float(numpy.sum(self.header['delta_angle']))
-                        self.header['delta_angle'] = float(self.header['delta_angle'][0])
+                        self.header['two_theta'] = 0.0
+                    else:
+                        self.header['total_angle'] = float(self.header['total_angle'][0])
+
+
 
                     break
             except KeyError:
@@ -240,7 +249,8 @@ class HDF5DataSet(DataSet):
         self.section_names = list(self.raw['/entry/data'].keys())
 
         # guess frame number ranges from number sections instead of reading external links
-        num_frames = len(self.extract_field('/entry/sample/goniometer/omega', array=True))
+        omega_field = OMEGA_FIELDS[self.hdf_type]
+        num_frames = len(self.extract_field(omega_field, array=True))
         num_sections = len(self.section_names)
         max_frames_per_section = int(numpy.ceil(num_frames / num_sections))
         frames = numpy.arange(max_frames_per_section * num_sections) + 1
@@ -281,9 +291,10 @@ class HDF5DataSet(DataSet):
             'template': template.format(field='?' * width),
             'regex': regex,
             'start_angle': self.header['start_angle'],
-            'sequence': frames,
+            'sequence': list(frames),
             'current': self.current_frame
         }
+        self.header['frame_number'] = self.current_frame
         return self.read_image()
 
     def read_image(self):
@@ -294,7 +305,9 @@ class HDF5DataSet(DataSet):
 
         folder = Path(self.directory)
         key = f'/entry/data/{self.current_section}'
-        path = folder.joinpath(f'{self.root_name}_{self.current_section}.h5')
+        link = self.raw.get(key, getlink=True)
+        section_file = link.filename
+        path = folder.joinpath(section_file)
 
         if path.exists():
             # wait for file to be written, up to 10 seconds. Assume mtime > 0.1 sec means done writing
@@ -302,9 +315,8 @@ class HDF5DataSet(DataSet):
             while time.time() - path.stat().st_mtime < 0.1 and time.time() < end_time:
                 time.sleep(0.1)
 
-            section = self.extract_field(key)
             frame_index = max(self.current_frame - self.sections[self.current_section][0], 0)
-            raw_data = section[frame_index]
+            raw_data = self.extract_field(key, array=True, index=frame_index)
             data_type = NUMBER_FORMATS[str(raw_data.dtype)]
             data = raw_data.view(data_type)
 
