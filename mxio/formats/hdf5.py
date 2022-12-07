@@ -224,7 +224,6 @@ class HDF5DataSet(DataSet):
                     # found the right axis
                     self.header['rotation_axis'] = axis
                     for field, path in OSCILLATION_FIELDS[self.hdf_type].items():
-                        print(field, path.format(axis))
                         self.header[f'{field}_angle'] = self.extract_field(path.format(axis), array=True)
 
                     # start angles are always sequences
