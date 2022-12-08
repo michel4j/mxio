@@ -421,7 +421,7 @@ class CBFDataSet(DataSet):
 
 
 def write_minicbf(filename: str, header: dict, image: numpy.ndarray):
-    info  = {}
+    info = {}
     info.update(header)
 
     info["distance"] /= 1000.
