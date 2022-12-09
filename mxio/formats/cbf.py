@@ -482,7 +482,4 @@ def write_minicbf(filename: str, header: dict, image: numpy.ndarray):
     cbflib.cbf_write_file(cbf, fh, 1, CBF, MSG_DIGEST | MIME_HEADERS | PAD_4K, 0)
     cbflib.cbf_free_handle(cbf)
 
-
-
-
 __all__ = ['CBFDataSet']

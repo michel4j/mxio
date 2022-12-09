@@ -77,7 +77,7 @@ def convert_date(text):
     """
     try:
         return datetime.fromisoformat(text.decode('utf-8'))
-    except AttributeError:
+    except (AttributeError, TypeError, ValueError):
         return iso8601.parse_date(text.decode('utf-8'))
 
 
@@ -210,8 +210,8 @@ class HDF5DataSet(DataSet):
                         converter(self.extract_field(sub_field, array=(key in ARRAY_FIELDS)))
                         for sub_field in field
                     )
-            except (ValueError, KeyError):
-                logger.warning('Field corresponding to {} not found!'.format(key))
+            except (ValueError, KeyError) as err:
+                logger.exception('Field corresponding to {} not found!'.format(key))
                 self.header[key] = DEFAULTS.get(key)
 
         self.header['name'] = self.name
@@ -239,8 +239,6 @@ class HDF5DataSet(DataSet):
                         self.header['two_theta'] = 0.0
                     else:
                         self.header['total_angle'] = float(self.header['total_angle'][0])
-
-
 
                     break
             except KeyError:
