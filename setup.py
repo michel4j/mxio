@@ -11,9 +11,23 @@ with open(os.path.join(os.path.dirname(__file__), 'requirements.txt')) as f:
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 
+def my_version():
+    from setuptools_scm.version import get_local_dirty_tag
+
+    def clean_scheme(version):
+        return get_local_dirty_tag(version) if version.dirty else ''
+
+    def version_scheme(version):
+        print(str(version))
+        return str(version.format_with('{tag}.{distance}'))
+
+    return {'local_scheme': clean_scheme, 'version_scheme': version_scheme}
+
+
+
 setup(
     name='mxio',
-    use_scm_version=True,
+    use_scm_version=my_version,
     packages=find_packages(),
     url='https://github.com/michel4j/mxio',
     include_package_data=True,
@@ -24,7 +38,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     install_requires=requirements+ [
-        'importlib-metadata ~= 1.0 ; python_version < "3.8"', 'setuptools_scm'
+        'importlib-metadata ~= 1.0 ; python_version < "3.8"', 'setuptools-scm'
     ],
     classifiers=[
         'Intended Audience :: Developers',

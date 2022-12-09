@@ -3,8 +3,17 @@ import os
 import re
 from pathlib import Path
 
+
 from .common import UnknownImageFormat, ImageIOError
 from .formats import get_formats
+
+
+try:
+    from importlib.metadata import version, PackageNotFoundError
+    __version__ = version("mxio")
+except (ImportError, PackageNotFoundError):
+    __version__ = "unknown version"
+
 
 MAGIC_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'magic')
 
@@ -35,16 +44,16 @@ def read_image(path,  header_only=False):
     else:
         filename = path
 
-    formats = get_formats()
+    available_formats = get_formats()
     full_id = get_file_type(filename)
     key = full_id.split(', ')[0].strip()
-    obj_class = formats.get(key)
+    obj_class = available_formats.get(key)
 
     if obj_class:
         img_obj = obj_class(path, header_only)
         return img_obj
     else:
-        known_formats = ', '.join([v.split()[0] for v in formats.keys()])
+        known_formats = ', '.join([v.split()[0] for v in available_formats.keys()])
         raise TypeError('Supported formats [{}]'.format(known_formats, ))
 
 
