@@ -1,10 +1,8 @@
 import re
-import os
-
-from pathlib import Path
-from abc import ABC
-from typing import Union, List, Tuple, Dict
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Union, List, Sequence, Tuple, TypedDict, ClassVar, BinaryIO
 
 import numpy
 from numpy.typing import NDArray, ArrayLike
@@ -18,11 +16,26 @@ def summarize_sequence(values: ArrayLike) -> List[Tuple[int, int]]:
     ]
 
 
-@dataclass
-class Frame:
-    header: Dict
-    data: Union[NDArray, None] = None
+class FrameHeader(TypedDict):
+    detector: str
+    format: str
+    pitch: Tuple[float, float]
+    center: Tuple[float, float]
+    size: Tuple[int, int]
+    distance: float
+    two_theta: float
+    exposure: float
+    wavelength: float
+    start_angle: float
+    delta_angle: float
+    saturated_value: float
+    sensor_thickness: float
 
+
+@dataclass
+class ImageFrame:
+    header: FrameHeader
+    data: Union[NDArray, None] = None
 
 
 class DataSet(ABC):
@@ -34,7 +47,8 @@ class DataSet(ABC):
     index: int
     sweeps: List[Tuple[int, int]]
     identifier: str
-    frame: Union[Frame, None] = None
+    frame: Union[ImageFrame, None] = None
+    description: ClassVar[str] = ""
 
     def __init__(self, file_path: Union[Path, str]):
         file_path = Path(file_path).absolute()
@@ -62,6 +76,30 @@ class DataSet(ABC):
             ], dtype=int)
             frames.sort()
             self.sweeps = summarize_sequence(frames)
+        else:
+            raise ValueError('Invalid dataset file')
+
+        self.frame = self.get_frame(self.index)
+
+    @abstractmethod
+    def understands(self, tags: Sequence[str]) -> bool:
+        ...
+
+
+    @abstractmethod
+    def get_frame(self, index:  int) -> ImageFrame:
+        ...
+
+    @abstractmethod
+    def next_frame(self) -> ImageFrame:
+        ...
+
+    @abstractmethod
+    def prev_frame(self) -> ImageFrame:
+        ...
+
+
+
 
 
 
