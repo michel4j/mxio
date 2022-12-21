@@ -1,6 +1,6 @@
 #------------------------------------------------------------------------------
 # X-Ray Area Detector images
-0	string	R-AXIS4\ \ \ 	R-Axis Area Detector Image:
+0	    string	R-AXIS4\ \ \ 	R-Axis Area Detector Image:
 >796	lelong	<20		Little-endian, IP #%d,
 >>768	lelong	>0		Size=%dx
 >>772	lelong	>0		\b%d
@@ -8,7 +8,7 @@
 >>768	belong	>0		Size=%dx
 >>772	belong	>0		\b%d
 
-0	string	RAXIS\ \ \ \ \ 	R-Axis Area Detector Image, Win32:
+0	    string	RAXIS\ \ \ \ \ 	R-Axis Area Detector Image, Win32:
 >796	lelong	<20		Little-endian, IP #%d,
 >>768	lelong	>0		Size=%dx
 >>772	lelong	>0		\b%d
@@ -16,22 +16,25 @@
 >>768	belong	>0		Size=%dx
 >>772	belong	>0		\b%d
 
-1028	string	MMX\000\000\000\000\000\000\000\000\000\000\000\000\000	marCCD Area Detector Image,
+1028	string	MMX\000\000\000\000\000\000\000\000\000\000\000\000\000	MAR Area Detector Image,
 >1072	ulong	>1		Compressed(%d),
 >1100	ulong	>1		%d headers,
->1104	ulong	>0		%d x
->1108	ulong	>0		%d,
->1120	ulong	>0		%d bits/pixel
+>1104	ulong	>0		Size=%dx
+>1108	ulong	>0		\b%d,
+>1120	ulong	>0		%d bits
 
-0	string	{\nHEADER_BYTES=	SMV Area Detector Image 
+0	    string	{\nHEADER_BYTES=	SMV Area Detector Image,
 
-0	string	###CBF:\ 	CBF Area Detector Image 
+0	    string	###CBF:\ VERSION	CBF Area Detector Image,
+>16     regex   [0-9]+.[0-9]+     Version %s,
+>>&1    search  _array_data.header_convention
+>>>&1   search  _array_data.header_contents     Mini CBF
 
-0       lelong          1234		mar345 Area Detector Image, (Little Endian)
+0       lelong  1234		mar345 Area Detector Image, Little-endian
 
-0       belong          1234		mar345 Area Detector Image, (Big Endian)
+0       belong  1234		mar345 Area Detector Image, Big-endian
 
-1   string	CCP4\ packed\ image	PCK Area Detector Image
+1       string	CCP4\ packed\ image	PCK Area Detector Image
 
 #-----------------------------------------------------------------------
 # Hierarchical Data Format, used to facilitate scientific data exchange
@@ -48,3 +51,7 @@
 !:mime	application/x-hdf
 4096	string	\211HDF\r\n\032\n	Hierarchical Data Format (version 5) with 4k user block
 !:mime	application/x-hdf
+
+# from module.submodule import func1, func2
+0	search/8192	import
+>0	regex		\^from[\040\t]+([A-Za-z0-9_]|\\.)+[\040\t]+import.*$	Python script text executable

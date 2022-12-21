@@ -1,4 +1,5 @@
 import re
+from os import PathLike
 import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -13,15 +14,28 @@ from numpy.typing import NDArray, ArrayLike
 MAGIC_FILE = Path(__file__).parent.joinpath('data', 'magic')
 
 
-def get_file_type(filename):
+def get_tags(filename: Union[str, Path]) -> Tuple[str, ...]:
+    """Identify the file format using libmagic and return corresponding tags
+
+    :param filename: Path | str
+    :return: Tuple[str, ...]
+    """
+
     try:
         m = magic.Magic(magic_file=str(MAGIC_FILE))
+        tag_string =  m.from_file(str(filename)).strip()
+        return tuple(re.split(r'\s*[,:]\s*', tag_string))
     except magic.MagicException:
-        m = magic.Magic()
-    return m.from_file(filename).strip()
+        return 'data',
 
 
 def summarize_sequence(values: ArrayLike) -> List[Tuple[int, int]]:
+    """Compress an array of integers into a list of tuple pairs representing contiguous ranges of values.
+    For example,  summarize_sequence([1,2,3,4,6,7,8,11]) -> [(1,4),(6,8),(11,11)]
+
+    :param values: ArrayLike
+    :return: List[Tuple[int, int]]
+    """
     return [
         (sweep[0], sweep[-1])
         for sweep in  numpy.split(values, numpy.where(numpy.diff(values) > 1)[0] + 1)
@@ -40,7 +54,7 @@ def all_subclasses(cls):
 class FrameHeader(TypedDict):
     detector: str
     format: str
-    pitch: Tuple[float, float]
+    pixel_size: Tuple[float, float]
     center: Tuple[float, float]
     size: Tuple[int, int]
     distance: float
@@ -77,9 +91,8 @@ class DataSet(ABC):
     sweeps: List[Tuple[int, int]]
     identifier: str
     frame: Union[ImageFrame, None] = None
-    tags: ClassVar[Tuple[str]] = ("",)
 
-    def __init__(self, file_path: Union[Path, str]):
+    def __init__(self, file_path: Union[PathLike, str]):
         file_path = Path(file_path).absolute()
         self.reference = file_path.name
         self.directory = file_path.parent
@@ -133,9 +146,9 @@ class DataSet(ABC):
 
     @classmethod
     def new_from_file(cls, filename: str):
+
         for format_class in all_subclasses(cls):
             print(format_class.tags)
-
 
     @abstractmethod
     def get_frame(self, index:  int) -> ImageFrame:
@@ -149,8 +162,9 @@ class DataSet(ABC):
     def prev_frame(self) -> ImageFrame:
         ...
 
+    @classmethod
     @abstractmethod
-    def understands(self, tags: Sequence[str]) -> bool:
+    def understands(cls, tags: Sequence[str]) -> bool:
         ...
 
 
