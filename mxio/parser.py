@@ -158,10 +158,16 @@ def parse_section(section, data):
     return output
 
 
-def parse_text(data, spec_name):
-    spec_file = '{}.yml'.format(spec_name)
-    with open(os.path.join(SPEC_PATH, spec_file), 'r') as handle:
-        specs = yaml.safe_load(handle)
+def parse_text(data, spec_file=None, spec_text=None):
+    if spec_file is not None:
+        spec_file = '{}.yml'.format(spec_file)
+        with open(os.path.join(SPEC_PATH, spec_file), 'r') as handle:
+            specs = yaml.safe_load(handle)
+    elif spec_text is not None:
+        specs = yaml.safe_load(spec_text)
+    else:
+        specs = {'root': {}}
+
     return parse_section(specs['root'], data)
 
 

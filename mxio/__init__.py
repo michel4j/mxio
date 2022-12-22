@@ -1,5 +1,6 @@
 import magic
 import os
+import sys
 import re
 from pathlib import Path
 
@@ -8,10 +9,16 @@ from .common import UnknownImageFormat, ImageIOError
 from .formats import get_formats
 
 
+if sys.version_info < (3, 10):
+    from importlib_metadata import entry_points, version, PackageNotFoundError
+else:
+    from importlib.metadata import entry_points, version, PackageNotFoundError
+
+
+
 try:
-    from importlib.metadata import version, PackageNotFoundError
     __version__ = version("mxio")
-except (ImportError, PackageNotFoundError):
+except PackageNotFoundError:
     __version__ = "unknown version"
 
 
