@@ -7,6 +7,7 @@ from mxio import dataset
 class DatasetTestCases(unittest.TestCase):
 
     def setUp(self) -> None:
+        from mxio.plugins import raxis, cbf, hdf5, smv, marccd, nexus
         self.data_dir = os.environ.get('TEST_DATA', '/data/Xtal/tests/')
 
     def test_summarize_range(self):
@@ -25,34 +26,33 @@ class DatasetTestCases(unittest.TestCase):
         self.assertEqual(summarized, expected, f'Range not summarized {summarized=} != {expected=}')
 
     def test_marccd_format(self):
-        from mxio.plugins import marccd
+        from mxio.plugins import cbf
         dset = dataset.DataSet.new_from_file(os.path.join(self.data_dir, 'marccd', 'marccd_001.img'))
+        cbf.CBFDataSet.save_frame('/tmp/marccd_0001.cbf', dset.frame)
 
     def test_smv_format(self):
-        from mxio.plugins import smv, cbf
+        from mxio.plugins import cbf
         dset = dataset.DataSet.new_from_file(os.path.join(self.data_dir, 'smv', 'smv_1_002.img'))
         cbf.CBFDataSet.save_frame('/tmp/smv_0001.cbf', dset.frame)
 
-    def test_cbf_save(self):
-        from mxio.plugins import cbf, marccd
-        dset1 = dataset.DataSet.new_from_file(os.path.join(self.data_dir, 'marccd', 'marccd_001.img'))
-        cbf.CBFDataSet.save_frame('/tmp/marccd_0001.cbf', dset1.frame)
-        dset2 = dataset.DataSet.new_from_file('/tmp/marccd_0001.cbf')
-        self.assertEqual((dset1.frame.data - dset2.frame.data).max(), 0.0, "Data mismatch")
-
     def test_cbf_format(self):
-        from mxio.plugins import cbf
-        dset = dataset.DataSet.new_from_file(os.path.join(self.data_dir, 'cbf', 'minicbf_0898.cbf'))
+        dataset.DataSet.new_from_file(os.path.join(self.data_dir, 'cbf', 'minicbf_0898.cbf'))
 
     def test_raxis_format(self):
-        from mxio.plugins import raxis, cbf
+        from mxio.plugins import cbf
         dset = dataset.DataSet.new_from_file(os.path.join(self.data_dir, 'raxis', 'lysozyme_0111060520.osc'))
         cbf.CBFDataSet.save_frame('/tmp/raxis_0001.cbf', dset.frame)
 
     def test_hdf5_format(self):
-        from mxio.plugins import hdf5, cbf
+        from mxio.plugins import cbf
         dset = dataset.DataSet.new_from_file(os.path.join(self.data_dir, 'hdf5', 'lysotest5_data_000028.h5'))
         cbf.CBFDataSet.save_frame('/tmp/hdf5_0001.cbf', dset.frame)
+
+    def test_nexus_format(self):
+        from mxio.plugins import cbf
+        dset = dataset.DataSet.new_from_file(os.path.join(self.data_dir, 'nexus', 'Mtb_MTR_std_pfGDR_8_2.nxs'))
+        cbf.CBFDataSet.save_frame('/tmp/nexus_0001.cbf', dset.frame)
+
 
 if __name__ == '__main__':
     unittest.main()

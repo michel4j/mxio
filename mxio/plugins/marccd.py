@@ -3,7 +3,7 @@ import cv2
 import math
 import struct
 from pathlib import Path
-from typing import Tuple, Union
+from typing import Tuple, Union, BinaryIO
 from numpy.typing import NDArray
 
 from mxio.dataset import DataSet, XYPair
@@ -14,9 +14,13 @@ __all__ = [
 
 
 class MarCCDDataSet(DataSet):
-    magic = (
-        {'offset': 0x404, "magic": b'MMX\0\0\0\0\0\0\0\0\0\0\0\0\0', "name": "MAR Area Detector Image"},
-    )
+
+    @classmethod
+    def identify(cls, file: BinaryIO, extension: str) -> Tuple[str, ...]:
+        magic = b'MMX\0\0\0\0\0\0\0\0\0\0\0\0\0'
+        file.seek(0x404)
+        if file.read(len(magic)) == magic:
+            return "MAR Area Detector Image",
 
     def read_file(self, filename: Union[str, Path]) -> Tuple[dict, NDArray]:
         # Read MarCCD header

@@ -70,12 +70,10 @@ CBF_ERROR_MESSAGES = {
 DECODER_DICT = {
     "unsigned 16-bit integer": (ct.c_uint16, 'F;16', 'F;16B'),
     "unsigned 32-bit integer": (ct.c_uint32, 'F;32', 'F;32B'),
+    "unsigned 64-bit integer": (ct.c_uint64, 'F;64', 'F;64B'),
     "signed 16-bit integer": (ct.c_int16, 'F;16S', 'F;16BS'),
     "signed 32-bit integer": (ct.c_int32, 'F;32S', 'F;32BS'),
-}
-
-ELEMENT_TYPES = {
-    "signed 32-bit integer": ct.c_int32,
+    "signed 64-bit integer": (ct.c_int64, 'F;64S', 'F;64BS'),
 }
 
 
@@ -359,7 +357,7 @@ class CBFDataSet(DataSet):
                 )
             })
 
-        self.data = self.raw_data.view(numpy.int32)
+        self.data = self.raw_data
         stats_subset = self.data[:self.data.shape[0] // 2, :self.data.shape[1] // 2]
         valid = (stats_subset >= 0) & (stats_subset < self.header['saturated_value'])
         self.stats_data = stats_subset[valid]
@@ -469,10 +467,10 @@ def write_minicbf(filename: str, header: dict, image: numpy.ndarray):
     cbflib.cbf_set_integerarray_wdims(
         cbf,
         CBF_BYTE_OFFSET,
-        1, # binary id
+        1,  # binary id
         ct.byref(data),
         ct.c_size_t(image.itemsize),
-        1, # signed
+        1,  # signed
         xpixels * ypixels,
         b"little_endian",
         ct.c_size_t(xpixels),

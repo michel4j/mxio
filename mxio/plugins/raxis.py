@@ -2,11 +2,11 @@ import os
 import numpy
 import struct
 from pathlib import Path
-from typing import Tuple, Union
+from typing import Tuple, Union, BinaryIO
 from numpy.typing import NDArray
 
 from mxio.dataset import DataSet, XYPair
-from mxio.utils import image_stats
+
 __all__ = [
     "RAXISDataSet"
 ]
@@ -72,9 +72,12 @@ HEADER_SPECS = {
 
 
 class RAXISDataSet(DataSet):
-    magic = (
-        {'offset': 0, "magic": b'RAXIS', "name": "RAXIS Area Detector Image"},
-    )
+
+    @classmethod
+    def identify(cls, file: BinaryIO, extension: str) -> Tuple[str, ...]:
+        magic = b'RAXIS'
+        if file.read(len(magic)) == magic:
+            return "RAXIS Area Detector Image",
 
     def read_file(self, filename: Union[str, Path]) -> Tuple[dict, NDArray]:
         # Read RAXIS header

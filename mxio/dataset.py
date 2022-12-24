@@ -1,3 +1,4 @@
+import os.path
 import re
 import sys
 from os import PathLike
@@ -7,9 +8,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Union, List, Optional, Tuple, TypedDict, ClassVar, BinaryIO, Sequence
 
+import sys
+if sys.version_info < (3, 10):
+    from importlib_metadata import entry_points
+else:
+    from importlib.metadata import entry_points
+
 import numpy
 from numpy.typing import NDArray, ArrayLike
-from mxio.identify import get_tags, TagInfo
 
 
 class UnknownDataFormat(Exception):
@@ -87,7 +93,7 @@ class DataSetAttrs(TypedDict):
     directory: Union[Path, None]
     template: str
     index: int
-    series: Sequence[Tuple[int, int]]
+    series: ArrayLike
     identifier: str
 
 
@@ -100,7 +106,6 @@ class DataSet(ABC):
     reference: str
     index: int
     tags: Tuple[str, ...]
-    magic: ClassVar[List[TagInfo]]
     frame: Union[ImageFrame, None]
 
     def __init__(
@@ -217,27 +222,36 @@ class DataSet(ABC):
         """
 
         with open(filename, 'rb') as file:
-            format_cls, tags = cls.get_format(file)
+            name, extension = os.path.splitext(filename)
+            format_cls, tags = cls.get_format(file, extension)
             if format_cls is None:
                 raise UnknownDataFormat(f"File {filename} not understood by any available file format plugins!")
             else:
                 return format_cls(filename, tags=tags)
 
     @classmethod
-    def get_format(cls, file: BinaryIO) -> Tuple[Union[type["DataSet"], None], Tuple[str, ...]]:
+    def get_format(cls, file: BinaryIO, extension: str) -> Tuple[Union[type["DataSet"], None], Tuple[str, ...]]:
         """
-        Find the best Datset format class for this dataset and a corresponding tuple of tags
+        Find the best Dataset format class for this dataset and the corresponding tuple of tags
+        The best format is the deepest subclass which returns tags for the file.
 
+        :param extension: File extension
         :param file: BinaryIO
         :return: A concrete dataset class or None and a tuple of tags
         """
 
+        for plugin in entry_points(group='mxio.plugins'):
+            print(plugin)
+            plugin.load()
+
         for base_cls in cls.__subclasses__():
-            tags = get_tags(file, base_cls.magic)
+            tags = base_cls.identify(file, extension)
+            file.seek(0)
             if tags:
                 for sub_cls in base_cls.__subclasses__():
-                    extra_tags = get_tags(file, sub_cls.magic)
-                    if extra_tags:
+                    extra_tags = sub_cls.identify(file, extension)
+                    file.seek(0)
+                    if extra_tags and extra_tags != tags:   # ignore subclasses which do nothing new
                         return sub_cls, tags + extra_tags
                 else:
                     return base_cls, tags
@@ -286,6 +300,18 @@ class DataSet(ABC):
             for sweep in numpy.split(numpy.array(self.series), numpy.where(numpy.diff(self.series) > 1)[0] + 1)
             if len(sweep)
         )
+
+    @classmethod
+    @abstractmethod
+    def identify(cls, file: BinaryIO, extension: str) -> Tuple[str, ...]:
+        """Identify a file and return a tuple of tags describing the file.
+        Should return an empty tuple if the file is not recognized.
+
+        :param file: BinaryIO
+        :param extension: File name extension
+        :return:  Tuple[str, ...]
+        """
+        ...
 
     @abstractmethod
     def read_file(self, filename: Union[str, Path]) -> Tuple[HeaderAttrs, NDArray]:

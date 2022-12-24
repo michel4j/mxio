@@ -1,25 +1,23 @@
-import os
-import cv2
+
+import re
+
+from pathlib import Path
+from typing import Tuple, Union, Sequence, Any, BinaryIO
+
 import h5py
 import hdf5plugin
 import numpy
-import iso8601
-
-import re
-import struct
-
-from datetime import datetime
-from pathlib import Path
-from typing import Tuple, Union, Sequence, Any
 from numpy.typing import NDArray
 
 from mxio.dataset import DataSet, XYPair
 
 __all__ = [
-    "HDF5DataSet"
+    "HDF5DataSet",
+    "hdf5_file_parts",
+    "CONVERTERS"
 ]
 
-HEADERS = {
+HEADER_FIELDS = {
     'detector': '/entry/instrument/detector/description',
     'serial_number': '/entry/instrument/detector/detector_number',
     'two_theta': '/entry/instrument/detector/goniometer/two_theta',
@@ -62,16 +60,6 @@ def save_array(name, data):
         fobj.create_dataset(name, data=data, **hdf5plugin.Bitshuffle(nelems=0, lz4=True))
 
 
-def convert_date(text):
-    """
-    Convert ISO formatted date time into datetime object
-    """
-    try:
-        return datetime.fromisoformat(text.decode('utf-8'))
-    except (AttributeError, TypeError, ValueError):
-        return iso8601.parse_date(text.decode('utf-8'))
-
-
 CONVERTERS = {
     'detector': lambda v: v.decode('utf-8'),
     'serial_number': lambda v: v.decode('utf-8'),
@@ -102,13 +90,16 @@ def hdf5_file_parts(image_path: Union[Path, str]) -> Tuple[int, str, Path]:
 
 
 class HDF5DataSet(DataSet):
-    magic = (
-        {'offset': 0, "magic": b'\211HDF\r\n\032\n', "name": "HDF5 Area Detector Data"},
-    )
 
     file: h5py.File
     data_sections: Sequence[str]
     max_section_size: int
+
+    @classmethod
+    def identify(cls, file: BinaryIO, extension: str) -> Tuple[str, ...]:
+        magic = b'\211HDF\r\n\032\n'
+        if file.read(len(magic)) == magic:
+            return "HDF5 Area Detector Data",
 
     def setup(self):
         image_path = self.directory.joinpath(self.reference)
@@ -144,16 +135,10 @@ class HDF5DataSet(DataSet):
             raw_value = numpy.array([raw_value])
         return raw_value
 
-    def read_file(self, filename: Union[str, Path]) -> Tuple[dict, NDArray]:
-        index, reference, directory = hdf5_file_parts(filename)
-        assert (reference, directory) == (self.reference, self.directory), "Invalid data archive"
-        assert index in self.series, f"Frame {index} does not exist in this archive"
+    def parse_header(self, header_fields: dict, oscillation_fields: dict):
+        header = {'filename': self.reference}
 
-        header = {
-            'format': 'HDF5',
-            'filename': self.reference,
-        }
-        for key, field in HEADERS.items():
+        for key, field in header_fields.items():
             converter = CONVERTERS.get(key, lambda v: v)
             try:
                 if not isinstance(field, (tuple, list)):
@@ -168,11 +153,11 @@ class HDF5DataSet(DataSet):
 
         for axis in ['omega', 'phi', 'chi', 'kappa']:
             try:
-                start_angles = self.extract_field(OSCILLATION_FIELDS['start'].format(axis), array=True)
+                start_angles = self.extract_field(oscillation_fields['start'].format(axis), array=True)
                 value_varies = (start_angles.mean() != 0.0 and numpy.diff(start_angles).sum() != 0)
                 if len(start_angles) == 1 or value_varies:
                     # found the right axis
-                    for field, path in OSCILLATION_FIELDS.items():
+                    for field, path in oscillation_fields.items():
                         header[f'{field}_angle'] = self.extract_field(path.format(axis), array=True)
 
                     header['start_angle'] = float(header['start_angle'][0])
@@ -185,6 +170,16 @@ class HDF5DataSet(DataSet):
         header['size'] = XYPair(*header["size"])
         header['pixel_size'] = XYPair(*header['pixel_size'])
         header['center'] = XYPair(*header["center"])
+
+        return header
+
+    def read_file(self, filename: Union[str, Path]) -> Tuple[dict, NDArray]:
+        index, reference, directory = hdf5_file_parts(filename)
+        assert (reference, directory) == (self.reference, self.directory), "Invalid data archive"
+        assert index in self.series, f"Frame {index} does not exist in this archive"
+
+        header = self.parse_header(HEADER_FIELDS, OSCILLATION_FIELDS)
+        header['format'] = 'HDF5'
 
         section_index, frame_index = divmod(index, self.max_section_size)
         assert section_index < len(self.data_sections), f"Section {section_index} does not exist"

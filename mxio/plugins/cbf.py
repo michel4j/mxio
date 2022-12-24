@@ -2,14 +2,13 @@ import ctypes as ct
 import os
 import re
 from pathlib import Path
-from typing import Tuple, Union
+from typing import Tuple, Union, BinaryIO
 
 import numpy
 from numpy.typing import ArrayLike
 
 from mxio import parser
 from mxio.dataset import DataSet, ImageFrame, XYPair
-from mxio.utils import image_stats
 
 __all__ = [
     "CBFDataSet"
@@ -79,6 +78,7 @@ DATA_TYPES = {
     "unsigned 32-bit integer": numpy.dtype('u4'),
     "signed 16-bit integer": numpy.dtype('i2'),
     "signed 32-bit integer": numpy.dtype('i4'),
+    "unsigned 64-bit integer": numpy.dtype("i8")
 }
 
 HEADER_SPECS = {
@@ -187,9 +187,12 @@ cbflib.cbf_set_integerarray_wdims.argtypes = [
 
 
 class CBFDataSet(DataSet):
-    magic = (
-        {'offset': 0, "magic": b'###CBF: VERSION', "name": "CBF Area Detector Image"},
-    )
+
+    @classmethod
+    def identify(cls, file: BinaryIO, extension: str) -> Tuple[str, ...]:
+        magic = b'###CBF: VERSION'
+        if file.read(len(magic)) == magic:
+            return "CBF Area Detector Image",
 
     @classmethod
     def save_frame(cls, file_path: Union[os.PathLike, str], frame: ImageFrame):

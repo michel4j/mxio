@@ -34,12 +34,20 @@ setup(
     license='MIT',
     author='Michel Fodje',
     author_email='michel4j@gmail.com',
-    description='A Simple MX Diffraction Image Library',
+    description='A Simple X-ray Area Detector Data IO Library',
     long_description=long_description,
     long_description_content_type="text/markdown",
-    install_requires=requirements+ [
-        'importlib-metadata ~= 1.0 ; python_version < "3.8"', 'setuptools-scm'
-    ],
+    install_requires=requirements,
+    entry_points={
+        'mxio.plugins': [
+            'CBF = mxio.plugins.cbf',
+            'HDF5 = mxio.plugins.hdf5',
+            'MARCCD = mxio.plugins.marccd',
+            'RAXIS = mxio.plugins.raxis',
+            'SMV = mxio.plugins.smv',
+            'NEXUS = mxio.plugins.nexus',
+        ]
+    },
     classifiers=[
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
