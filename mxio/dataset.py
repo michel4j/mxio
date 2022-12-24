@@ -5,18 +5,11 @@ import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Union, List, Optional, Tuple, TypedDict, ClassVar, BinaryIO
+from typing import Union, List, Optional, Tuple, TypedDict, ClassVar, BinaryIO, Sequence
 
 import numpy
-import magic
 from numpy.typing import NDArray, ArrayLike
 from mxio.identify import get_tags, TagInfo
-
-
-if sys.version_info < (3, 10):
-    from importlib_metadata import entry_points
-else:
-    from importlib.metadata import entry_points
 
 
 class UnknownDataFormat(Exception):
@@ -43,12 +36,26 @@ class XYPair:
     y: Union[int, float]
 
 
-@dataclass
-class DataDescription:
-    name: str
-    index: int
-    template: str
-    frames: ArrayLike
+class HeaderAttrs(TypedDict):
+    detector: str
+    serial_number: str
+    format: str
+    filename: str
+    pixel_size: XYPair
+    center: XYPair
+    size: XYPair
+    distance: float
+    two_theta: float
+    exposure: float
+    wavelength: float
+    start_angle: float
+    delta_angle: float
+    cutoff_value: float
+    maximum: float
+    minimum: float
+    average: float
+    overloads: int
+    sensor_thickness: float
 
 
 @dataclass
@@ -65,84 +72,95 @@ class ImageFrame:
     wavelength: float
     start_angle: float
     delta_angle: float
-    saturated_value: float = field(repr=False)
+    cutoff_value: float = field(repr=False)
+    serial_number: str = field(repr=False, default='00-000')
     maximum: Optional[float] = field(repr=False, default=0.0)
     minimum: Optional[float] = field(repr=False, default=0.0)
     average: Optional[float] = field(repr=False, default=0.0)
     overloads: Optional[int] = field(repr=False, default=0)
     sensor_thickness: Optional[float] = field(repr=False, default=0.0)
-
     data: Union[NDArray, None] = field(repr=False, default=None)
+
+
+class DataSetAttrs(TypedDict):
+    name: str
+    directory: Union[Path, None]
+    template: str
+    index: int
+    series: Sequence[Tuple[int, int]]
+    identifier: str
 
 
 class DataSet(ABC):
     name: str
     directory: Path
+    series: ArrayLike
+    identifier: str
     template: str
-    regex: str
     reference: str
     index: int
-    sweeps: List[Tuple[int, int]]
-    identifier: str
     tags: Tuple[str, ...]
     magic: ClassVar[List[TagInfo]]
-    frame: Union[ImageFrame, None] = None
+    frame: Union[ImageFrame, None]
 
-    def __init__(self, file_path: Union[PathLike, str], tags: Tuple[str, ...] = ()):
-        file_path = Path(file_path).absolute()
-        self.reference = file_path.name
-        self.directory = file_path.parent
+    def __init__(
+            self, file_path: Union[PathLike, str, None] = None,
+            tags: Tuple[str, ...] = (),
+            attrs: Union[DataSetAttrs, None] = None
+    ):
+        self.name = ""
+        self.directory = Path()
+        self.series = numpy.array([])
+        self.template = ""
+        self.reference = ""
+        self.index = 0
         self.tags = tags
-        info = self.find_frames(self.directory, self.reference)
-        self.index = info.index
-        self.template = info.template
-        self.name = info.name
-        self.sweeps = summarize_sequence(info.frames)
-        self.frame = self.get_frame(self.index)
+
+        if file_path is not None:
+            file_path = Path(file_path).absolute()
+            self.reference = file_path.name
+            self.directory = file_path.parent
+            self.setup()
+        elif attrs is not None:
+            self.name = attrs['name']
+            self.index = attrs['index']
+            self.template = attrs['template']
+            self.series = attrs.get('series', numpy.array([]))
 
         self.identifier = hashlib.blake2s(
             bytes(self.directory) + self.name.encode('utf-8'), digest_size=16
         ).hexdigest()
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(name={self.name!r}, identifier={self.identifier!r}, template={self.template!r}, directory={self.directory!r})'
+        return (
+            f'{self.__class__.__name__}(name={self.name!r}, '
+            f'identifier={self.identifier!r}, '
+            f'template={self.template!r}, '
+            f'directory={self.directory!r})'
+        )
 
-    @classmethod
-    def save_frame(cls, file_path: Union[PathLike, str], frame: ImageFrame):
-        """Save the image frame to disk.
-
-        :param frame: ImageFrame to save to file
-        :param file_path: full path to file
+    def setup(self):
         """
-        raise NotImplementedError("This format does not support exporting")
-
-    @classmethod
-    def find_frames(cls, directory: Path, reference: str) -> DataDescription:
-        """
-        Find dataset sweeps corresponding to this dataset and update the attributes,
-        'name', 'index', 'regex', 'template', and 'sweeps'
-
-        :param directory:  file path
-        :param reference:  Reference file name
-        :return: DataDescription object
+        Find dataset sweeps corresponding to this dataset on disk and update the attributes,
+        'name', 'index', 'regex', 'template', 'frame' and 'sweeps'
         """
 
         pattern = re.compile(
-            r'^(?P<root_name>[\w_-]+?)(?P<separator>[._-]?)'
+            r'^(?P<name>[\w_-]+?)(?P<separator>[._-]?)'
             r'(?P<field>\d{3,12})(?P<extension>(?:\.\D\w+)?)$'
         )
-        matched = pattern.match(reference)
+        matched = pattern.match(self.reference)
         if matched:
             params = matched.groupdict()
             width = len(params['field'])
-            name = params['root_name']
+            name = params['name']
             index = int(params['field'])
-            template = '{root_name}{separator}{{field:>0{width}}}{extension}'.format(width=width, **params)
+            template = '{name}{separator}{{field:>0{width}}}{extension}'.format(width=width, **params)
             frame_pattern = re.compile(
-                r'^{root_name}{separator}(\d{{{width}}}){extension}$'.format(width=width, **params)
+                r'^{name}{separator}(\d{{{width}}}){extension}$'.format(width=width, **params)
             )
             frames = numpy.array([
-                int(frame_match.group(1)) for file_name in directory.iterdir()
+                int(frame_match.group(1)) for file_name in self.directory.iterdir()
                 for frame_match in [frame_pattern.match(file_name.name)]
                 if file_name.is_file() and frame_match
             ], dtype=int)
@@ -153,7 +171,42 @@ class DataSet(ABC):
             index = 0
             template = ""
             frames = numpy.array([])
-        return DataDescription(name=name, index=index, template=template, frames=frames)
+
+        self.name = name
+        self.index = index
+        self.template = template
+        self.series = frames
+        self.frame = self.get_frame(self.index)
+
+    def get_frame(self, index: int) -> Union[ImageFrame, None]:
+        if index in self.series:
+            file_name = self.directory.joinpath(self.template.format(field=index))
+            header, data = self.read_file(file_name)
+
+            # calculate statistics if missing in header
+            if any(key not in header for key in ("average", "minimum", "maximum", "overloads")):
+                w, h = numpy.array(data.shape) // 2
+                stats_data = data[:h, :w]
+                mask = stats_data > 0
+                header.update({
+                    "maximum": stats_data[mask].max(),
+                    "average": stats_data[mask].mean(),
+                    "minimum": stats_data[mask].min(),
+                    "overloads": 4 * (stats_data[mask] >= header['cutoff_value']).sum()
+                })
+            frame = ImageFrame(**header, data=data)
+            self.frame = frame
+            self.index = index
+            return self.frame
+
+    @classmethod
+    def save_frame(cls, file_path: Union[PathLike, str], frame: ImageFrame):
+        """Save the image frame to disk.
+
+        :param frame: ImageFrame to save to file
+        :param file_path: full path to file
+        """
+        raise RuntimeWarning("This format does not support exporting")
 
     @classmethod
     def new_from_file(cls, filename: str) -> "DataSet":
@@ -191,17 +244,55 @@ class DataSet(ABC):
         else:
             return None, ()
 
-    @abstractmethod
-    def get_frame(self, index: int) -> Union[ImageFrame, None]:
-        ...
-
-    @abstractmethod
     def next_frame(self) -> Union[ImageFrame, None]:
-        ...
+        """
+        Load and return the next Frame in the dataset. Also updates the current frame and index to this
+        frame.
+
+        :return: ImageFrame | None if there is no next frame in the sequence
+        """
+        return self.get_frame(self.index + 1)
+
+    def prev_frame(self) -> Union[ImageFrame, None]:
+        """
+        Load and return the previous Frame in the dataset. Also updates the current frame and index to this
+        frame.
+
+        :return: ImageFrame | None if there is no previous frame in the sequence
+        """
+        return self.get_frame(self.index - 1)
+
+    def set_frame(self, frame: ImageFrame, index: int):
+        """
+        Set the current frame and frame index directly from a frame instance.
+
+        :param frame: ImageFrame
+        :param index: int
+        """
+        self.index = index
+        self.frame = frame
+
+    def get_sweeps(self) -> Sequence[Tuple[int, int]]:
+        """
+        Compress an the frame series which is a sequence of ints into a sequence of tuple pairs representing
+        contiguous ranges of values.
+        For example,  summarize_sequence([1,2,3,4,6,7,8,11]) -> [(1,4),(6,8),(11,11)]
+
+         :return: Sequence[Tuple[int, int]]
+         """
+
+        return tuple(
+            (sweep[0], sweep[-1])
+            for sweep in numpy.split(numpy.array(self.series), numpy.where(numpy.diff(self.series) > 1)[0] + 1)
+            if len(sweep)
+        )
 
     @abstractmethod
-    def prev_frame(self) -> Union[ImageFrame, None]:
+    def read_file(self, filename: Union[str, Path]) -> Tuple[HeaderAttrs, NDArray]:
+        """
+        Read
+        :param filename: file to read
+        :return: Tuple[dict, NDArray]
+        """
         ...
 
-
-format_plugins = entry_points(group='mxio.plugins')

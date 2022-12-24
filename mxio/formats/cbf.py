@@ -97,6 +97,7 @@ try:
 except Exception:
     raise TypeError('C Shared Library not available')
 
+
 # define argument and return types
 libc.fopen.argtypes = [ct.c_char_p, ct.c_char_p]
 libc.fopen.restype = ct.c_void_p
@@ -283,7 +284,7 @@ def read_cbf(filename, with_image=True):
         if res == 0 and hdr_type.value != b'XDS special':
             logger.debug('miniCBF header type found: {}'.format(hdr_type.value))
             info = parser.parse_text((hdr_contents.value).decode(), (hdr_type.value).decode())
-            header['detector_type'] = info['detector'].lower().strip().replace(' ', '')
+            header['detector_type'] = info['detector'].strip()
             header['two_theta'] = 0 if not info['two_theta'] else round(info['two_theta'], 2)
             header['pixel_size'] = round(info['pixel_size'][0] * 1000, 5)
             header['exposure_time'] = info['exposure_time']
@@ -366,9 +367,9 @@ class CBFDataSet(DataSet):
         if valid.sum() == 0:
             self.stats_data = stats_subset
 
-        self.header['average_intensity'], self.header['std_dev'] = numpy.ravel(cv2.meanStdDev(self.stats_data))
-
+        self.header['std_dev'] = self.stats_data.std()
         self.header['min_intensity'] = self.stats_data.min()
+        self.header['average_intensity'] = self.stats_data.mean()
         self.header['max_intensity'] = self.stats_data.max()
         self.header['overloads'] = 4 * (self.stats_data == self.header['saturated_value']).sum()
         self.header['frame_number'] = self.current_frame

@@ -1,15 +1,16 @@
+import ctypes as ct
 import os
 import re
-
-import ctypes as ct
-import numpy
-from enum import Enum
 from pathlib import Path
 from typing import Tuple, Union
+
+import numpy
 from numpy.typing import ArrayLike
 
-from mxio.dataset import DataSet, ImageFrame, XYPair
 from mxio import parser
+from mxio.dataset import DataSet, ImageFrame, XYPair
+from mxio.utils import image_stats
+
 __all__ = [
     "CBFDataSet"
 ]
@@ -50,6 +51,7 @@ class Flags:
     BYTE_OFFSET = 0x0070
     PAD_4K = 0x0080  # Pad binaries with 4095 0's
 
+
 ERROR_MESSAGES = {
     ErrorType.FORMAT: 'Invalid File Format',
     ErrorType.ALLOC: 'Memory Allocation Error',
@@ -72,73 +74,45 @@ ERROR_MESSAGES = {
     ErrorType.NO_COMPRESSION: 'No compression',
 }
 
-
 DATA_TYPES = {
-    "unsigned 16-bit integer": (ct.c_uint16, 'F;16', 'F;16B'),
-    "unsigned 32-bit integer": (ct.c_uint32, 'F;32', 'F;32B'),
-    "signed 16-bit integer": (ct.c_int16, 'F;16S', 'F;16BS'),
-    "signed 32-bit integer": (ct.c_int32, 'F;32S', 'F;32BS'),
+    "unsigned 16-bit integer": numpy.dtype('u2'),
+    "unsigned 32-bit integer": numpy.dtype('u4'),
+    "signed 16-bit integer": numpy.dtype('i2'),
+    "signed 32-bit integer": numpy.dtype('i4'),
 }
-
-ELEMENT_TYPES = {
-    "signed 32-bit integer": ct.c_int32,
-}
-
-
-PILATUS_HEADER_SPECS = """
-root:
-  fields:
-    - "# Detector: <str:detector>, S/N <slug:serial_number>"
-    - "# Pixel_size <float:pixel_size> m x <float:pixel_size> m"
-    - "# Exposure_period <float:exposure> s"
-    - "# Count_cutoff <int:saturated_value> counts"
-    - "# Wavelength <float:wavelength> A"
-    - "# Detector_distance <float:distance> m"
-    - "# Beam_xy (<float:center>, <float:center>) pixels"
-    - "# Start_angle <float:start_angle> deg"
-    - "# Angle_increment <float:delta_angle> deg."
-    - "# Detector_2theta <float:two_theta> deg."
-    - "# Silicon sensor, thickness <float:sensor_thickness> m"
-
-"""
-
-SLS_HEADER_SPECS = """
-root:
-  fields:
-    - "# Detector: <str:detector>, SN <slug:serial_number>, <str:beamline>"
-    - "# Pixel_size <float:pixel_size> m x <float:pixel_size> m"
-    - "# Exposure_period <float:exposure> s"
-    - "# Count_cutoff <int:saturated_value> counts"
-    - "# Wavelength <float:wavelength> A"
-    - "# Detector_distance <float:distance> m"
-    - "# Beam_xy (<float:center>, <float:center>) pixels"
-    - "# Start_angle <float:start_angle> deg"
-    - "# Angle_increment <float:delta_angle> deg."
-    - "# Detector_2theta <float:two_theta> deg."
-    - "# Silicon sensor, thickness <float:sensor_thickness> m"
-"""
 
 HEADER_SPECS = {
-    "PILATUS_1.2": PILATUS_HEADER_SPECS,
-    "SLS_1.0": SLS_HEADER_SPECS,
+    "SLS_1.0": {
+        "fields": [
+            "# Detector: <str:detector>, SN <slug:serial_number>, <str:beamline>",
+            "# Pixel_size <float:pixel_size> m x <float:pixel_size> m",
+            "# Exposure_period <float:exposure> s",
+            "# Count_cutoff <int:cutoff_value> counts",
+            "# Wavelength <float:wavelength> A",
+            "# Detector_distance <float:distance> m",
+            "# Beam_xy (<float:center>, <float:center>) pixels",
+            "# Start_angle <float:start_angle> deg",
+            "# Angle_increment <float:delta_angle> deg.",
+            "# Detector_2theta <float:two_theta> deg.",
+            "# Silicon sensor, thickness <float:sensor_thickness> m"
+        ]
+    },
+    "PILATUS_1.2": {
+        'fields': [
+            '# Detector: <str:detector>, S/N <slug:serial_number>',
+            '# Pixel_size <float:pixel_size> m x <float:pixel_size> m',
+            '# Exposure_period <float:exposure> s',
+            '# Count_cutoff <int:cutoff_value> counts',
+            '# Wavelength <float:wavelength> A',
+            '# Detector_distance <float:distance> m',
+            '# Beam_xy (<float:center>, <float:center>) pixels',
+            '# Start_angle <float:start_angle> deg',
+            '# Angle_increment <float:delta_angle> deg.',
+            '# Detector_2theta <float:two_theta> deg.',
+            '# Silicon sensor, thickness <float:sensor_thickness> m'
+        ]
+    }
 }
-
-
-def _format_error(code):
-    errors = []
-    for k, v in ERROR_MESSAGES.items():
-        if (code | k) == code:
-            errors.append(v)
-    return ', '.join(errors)
-
-
-def max_int(t):
-    v = t(2 ** (8 * ct.sizeof(t)) - 1).value
-    if v == -1:  # signed
-        return ct.c_double(2 ** (8 * ct.sizeof(t) - 1) - 1)
-    else:  # unsigned
-        return ct.c_double(2 ** (8 * ct.sizeof(t) - 1))
-
 
 def unit_vector(vector):
     """ Returns the unit vector of the vector.  """
@@ -151,6 +125,8 @@ libc = ct.cdll.LoadLibrary('libc.so.6')
 # LIBC Arg and return types
 libc.fopen.argtypes = [ct.c_char_p, ct.c_char_p]
 libc.fopen.restype = ct.c_void_p
+libc.fclose.argtypes = [ct.c_void_p]
+libc.fclose.restype = ct.c_int
 
 # CBF Arg and return types
 cbflib.cbf_make_handle.argtypes = [ct.c_void_p]
@@ -215,36 +191,21 @@ class CBFDataSet(DataSet):
         {'offset': 0, "magic": b'###CBF: VERSION', "name": "CBF Area Detector Image"},
     )
 
-    def get_frame(self, index: int) -> Union[ImageFrame, None]:
-        if any(index in range(sweep[0], sweep[1] + 1) for sweep in self.sweeps):
-            file_name = self.directory.joinpath(self.template.format(field=index))
-            header, data = self._read_cbf_file(file_name)
-            frame = ImageFrame(**header, data=data)
-            self.frame = frame
-            self.index = index
-            return self.frame
-
-    def next_frame(self) -> Union[ImageFrame, None]:
-        return self.get_frame(self.index + 1)
-
-    def prev_frame(self) -> Union[ImageFrame, None]:
-        return self.get_frame(self.index - 1)
-
     @classmethod
-    def save_frame(cls, file_path: Union[os.PathLike, str], frame: ImageFrame, serial_number: str = '###-###'):
+    def save_frame(cls, file_path: Union[os.PathLike, str], frame: ImageFrame):
         header_text = (
             f"\n"
-            f"# Detector: {frame.detector}, S/N {serial_number}\n"
-            f"# Pixel_size {frame.pixel_size.x * 1000:0.0f}e-6 m x {frame.pixel_size.y*1000:0.0f}e-6 m\n"
-            f"# Silicon sensor, thickness {frame.sensor_thickness/1000:0.6f} m\n"
+            f"# Detector: {frame.detector}, S/N {frame.serial_number}\n"
+            f"# Pixel_size {frame.pixel_size.x / 1000:0.4e} m x {frame.pixel_size.y / 1000:0.4e} m\n"
+            f"# Silicon sensor, thickness {frame.sensor_thickness / 1000:0.6f} m\n"
             f"# Exposure_time {frame.exposure:0.7f} s\n"
             f"# Exposure_period {frame.exposure:0.7f} s\n"
-            f"# Count_cutoff {frame.saturated_value:0.0f} counts\n"
+            f"# Count_cutoff {frame.cutoff_value:0.0f} counts\n"
             f"# Wavelength {frame.wavelength:0.5f} A\n"
             f"# Flux 0.000000\n"
             f"# Filter_transmission 1.0000\n"
-            f"# Detector_distance {frame.distance:0.5f} m\n"
-            f"# Beam_xy ({frame.center.x}, {frame.center.y}) pixels\n"
+            f"# Detector_distance {frame.distance / 1000:0.5f} m\n"
+            f"# Beam_xy ({frame.center.x:0.1f}, {frame.center.y:0.1f}) pixels\n"
             f"# Start_angle {frame.start_angle:0.4f} deg.\n"
             f"# Angle_increment {frame.delta_angle:0.4f} deg.\n"
             f"# Detector_2theta {frame.two_theta:0.4f} deg.\n"
@@ -252,30 +213,30 @@ class CBFDataSet(DataSet):
         header_content = header_text + (4096 - len(header_text)) * b'\0'  # pad header to 4096 bytes
 
         # create CBF handle
-        cbf = ct.c_void_p()
-        cbflib.cbf_make_handle(ct.byref(cbf))
-        cbflib.cbf_new_datablock(cbf, b"image_1")
-        fh = libc.fopen(str(file_path).encode('utf-8'), b"wb")
+        cbf_data = ct.c_void_p()
+        cbflib.cbf_make_handle(ct.byref(cbf_data))
+        cbflib.cbf_new_datablock(cbf_data, b"image_1")
+        file_pointer = libc.fopen(str(file_path).encode('utf-8'), b"wb")
 
         # Write miniCBF header
-        cbflib.cbf_new_category(cbf, b"array_data")
-        cbflib.cbf_new_column(cbf, b"header_convention")
-        cbflib.cbf_set_value(cbf, b"PILATUS_1.2")
-        cbflib.cbf_new_column(cbf, b"header_contents")
-        cbflib.cbf_set_value(cbf, header_content)
+        cbflib.cbf_new_category(cbf_data, b"array_data")
+        cbflib.cbf_new_column(cbf_data, b"header_convention")
+        cbflib.cbf_set_value(cbf_data, b"PILATUS_1.2")
+        cbflib.cbf_new_column(cbf_data, b"header_contents")
+        cbflib.cbf_set_value(cbf_data, header_content)
 
         # Write the image data
-        cbflib.cbf_new_category(cbf, b"array_data")
-        cbflib.cbf_new_column(cbf, b"data")
+        cbflib.cbf_new_category(cbf_data, b"array_data")
+        cbflib.cbf_new_column(cbf_data, b"data")
 
         data = ct.create_string_buffer(frame.data.tobytes())
         cbflib.cbf_set_integerarray_wdims(
-            cbf,
+            cbf_data,
             Flags.BYTE_OFFSET,
             1,  # binary id
             ct.byref(data),
             ct.c_size_t(frame.data.itemsize),
-            1,  # signed
+            0,  # signed
             frame.size.x * frame.size.y,
             b"little_endian",
             ct.c_size_t(frame.size.x),
@@ -283,11 +244,10 @@ class CBFDataSet(DataSet):
             0,
             0
         )
-        cbflib.cbf_write_file(cbf, fh, 1, 0, Flags.MSG_DIGEST | Flags.MIME_HEADERS | Flags.PAD_4K, 0)
-        cbflib.cbf_free_handle(cbf)
+        cbflib.cbf_write_file(cbf_data, file_pointer, 1, 0, Flags.MSG_DIGEST | Flags.MIME_HEADERS | Flags.PAD_4K, 0)
+        cbflib.cbf_free_handle(cbf_data)
 
-    @staticmethod
-    def _read_cbf_file(filename: Union[str, Path]) -> Tuple[dict, ArrayLike]:
+    def read_file(self, filename: Union[str, Path]) -> Tuple[dict, ArrayLike]:
         handle = ct.c_void_p()
         goniometer = ct.c_void_p()
         detector = ct.c_void_p()
@@ -360,7 +320,8 @@ class CBFDataSet(DataSet):
 
         x_center, y_center = ct.c_double(0.0), ct.c_double(0.0)
         ix, iy = ct.c_double(x_size.value / 2.0), ct.c_double(y_size.value / 2.0)
-        result |= cbflib.cbf_get_beam_center(detector, ct.byref(ix), ct.byref(iy), ct.byref(x_center), ct.byref(y_center))
+        result |= cbflib.cbf_get_beam_center(detector, ct.byref(ix), ct.byref(iy), ct.byref(x_center),
+                                             ct.byref(y_center))
         header['center'] = XYPair(ix.value, iy.value)
 
         exposure = ct.c_double(0.0)
@@ -372,10 +333,9 @@ class CBFDataSet(DataSet):
         header['start_angle'] = start_angle.value
         header['delta_angle'] = delta_angle.value
 
-        element_type = DATA_TYPES[mime_header.get('X-Binary-Element-Type', 'signed 32-bit integer')][0]
-        ovl = max_int(element_type)
+        ovl = ct.c_double()
         result |= cbflib.cbf_get_overload(handle, 0, ct.byref(ovl))
-        header['saturated_value'] = ovl.value
+        header['cutoff_value'] = ovl.value
 
         # FIXME Calculate actual two_theta from the beam direction and detector normal
         # vec_x, vec_y, vec_z = ct.c_double(0.0), ct.c_double(0.0), ct.c_double(0.0)
@@ -388,7 +348,7 @@ class CBFDataSet(DataSet):
 
         detector_name = ct.c_char_p()
         result |= cbflib.cbf_get_detector_id(handle, 0, ct.byref(detector_name))
-        header['detector'] = detector_name.value if detector_name.value else "Unknown"
+        header['detector'] = detector_name.value if detector_name.value else "UNKNOWN"
 
         # handle XDS Special cbf files
         if header['distance'] == 999.0 and header['delta_angle'] == 0.0 and header['exposure'] == 0.0:
@@ -403,11 +363,10 @@ class CBFDataSet(DataSet):
             result |= cbflib.cbf_get_value(handle, ct.byref(mini_cbf_header))
 
             if result == 0 and mini_cbf_type.value != b'XDS special':
-                spec_text = HEADER_SPECS[mini_cbf_type.value.decode()]
-                info = parser.parse_text((mini_cbf_header.value).decode(), spec_text=spec_text)
-
-                pixel_size = list(map(lambda v: round(v*1000,5), info['pixel_size']))
-                header['detector'] = info['detector'].strip().replace(' ', '')
+                specs = HEADER_SPECS[mini_cbf_type.value.decode('utf-8')]
+                info = parser.parse_section(specs, mini_cbf_header.value.decode('utf-8'))
+                pixel_size = list(map(lambda v: v * 1000, info['pixel_size']))
+                header['detector'] = info['detector'].strip()
                 header['two_theta'] = 0 if not info['two_theta'] else round(info['two_theta'], 2)
                 header['pixel_size'] = XYPair(*pixel_size)
                 header['exposure'] = info['exposure']
@@ -416,13 +375,12 @@ class CBFDataSet(DataSet):
                 header['center'] = XYPair(*info['center'])
                 header['start_angle'] = info['start_angle']
                 header['delta_angle'] = info['delta_angle']
-                header['saturated_value'] = info['saturated_value']
+                header['cutoff_value'] = info['cutoff_value']
                 header['sensor_thickness'] = info['sensor_thickness'] * 1000
 
+        data_type = DATA_TYPES[mime_header.get('X-Binary-Element-Type', 'signed 32-bit integer')]
+        element_size = data_type.itemsize
         num_elements = header['size'].x * header['size'].y
-        mime_params = DATA_TYPES[mime_header.get('X-Binary-Element-Type', 'signed 32-bit integer')]
-        element_type = mime_params[0]
-        element_size = ct.sizeof(element_type)
         data = ct.create_string_buffer(num_elements * element_size)
         result = cbflib.cbf_get_image(handle, 0, 0, ct.byref(data), element_size, 1, header['size'].x, header['size'].y)
         if result != 0:
@@ -437,17 +395,10 @@ class CBFDataSet(DataSet):
                 ct.byref(elements_read)
             )
 
-        data = numpy.frombuffer(data, dtype=element_type).reshape(header['size'].y, header['size'].x)
+        data = numpy.frombuffer(data, dtype=data_type).reshape(header['size'].y, header['size'].x)
 
         result |= cbflib.cbf_free_goniometer(goniometer)
         result |= cbflib.cbf_free_detector(detector)
         result |= cbflib.cbf_free_handle(handle)
-
-        # calculate extra statistics
-        mask = data >= 0
-        header['maximum'] = data[mask].max()
-        header['average'] = data[mask].mean()
-        header['minimum'] = data[mask].min()
-        header['overloads'] = (data[mask] >= header['saturated_value']).sum()
 
         return header, data

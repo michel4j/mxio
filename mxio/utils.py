@@ -1,19 +1,39 @@
 import os
 import re
+from typing import TypedDict
 from datetime import datetime
 
 import numpy
+from numpy.typing import NDArray
 import pytz
 
 
-def stretch(gamma):
-    lut = (gamma * numpy.arange(65536)).astype(numpy.uint)
-    lut[lut > 254] = 254
-    return lut
+class ImageStats(TypedDict):
+    maximum: float
+    average: float
+    minimum: float
+    overloads: int
 
 
-def calc_gamma(avg_int):
-    return 2.7 if avg_int == 0.0 else 29.378 * avg_int ** -0.86
+def image_stats(data: NDArray, saturated_value: float) -> ImageStats:
+    """
+    Calculate approximate image statistics using a quadrant of the image only
+
+    :param data: NDArray
+    :param saturated_value:
+    :return: ImageStats dictionary
+    """
+
+    w, h = numpy.array(data.shape)//2
+    stats_data = data[:h, :w]
+    mask = stats_data > 0
+
+    return {
+        "maximum": stats_data[mask].max(),
+        "average": stats_data[mask].mean(),
+        "minimum": stats_data[mask].min(),
+        "overloads": 4*(stats_data[mask] >= saturated_value).sum()
+    }
 
 
 def file_sequences(filename):
@@ -29,7 +49,7 @@ def file_sequences(filename):
 
     directory, filename = os.path.split(os.path.abspath(filename))
     p1 = re.compile(
-        '^(?P<root_name>[\w_-]+?)(?P<separator>(?:[._-])?)(?P<field>\d{3,12})(?P<extension>(?:\.[^\d][\w]+)?)$')
+        r'^(?P<root_name>[\w_-]+?)(?P<separator>[._-]?)(?P<field>\d{3,12})(?P<extension>(?:\.\D\w+)?)$')
 
     m = p1.match(filename)
     if m:
@@ -37,7 +57,7 @@ def file_sequences(filename):
         files = os.listdir(directory)
         width = len(params['field'])
         current = int(params['field'])
-        regex = '^{root_name}{separator}(\d{{{width}}}){extension}$'.format(width=width, **params)
+        regex = r'^{root_name}{separator}(\d{{{width}}}){extension}$'.format(width=width, **params)
         p2 = re.compile(regex)
         frames = [int(m.group(1)) for f in files for m in [p2.match(f)] if m]
 

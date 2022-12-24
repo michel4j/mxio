@@ -62,7 +62,7 @@ def read_marccd(filename, with_image=True):
     header['filename'] = os.path.basename(filename)
 
     det_mm = int(round(header['pixel_size'] * header['detector_size'][0]))
-    header['detector_type'] = 'mar%d' % det_mm
+    header['detector_type'] = 'MX%d' % det_mm
     header['format'] = 'TIFF'
 
     data = cv2.imread(filename, -1)
