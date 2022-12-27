@@ -18,7 +18,6 @@ def my_version():
         return get_local_dirty_tag(version) if version.dirty else ''
 
     def version_scheme(version):
-        print(str(version))
         return str(version.format_with('{tag}.{distance}'))
 
     return {'local_scheme': clean_scheme, 'version_scheme': version_scheme}
@@ -40,12 +39,12 @@ setup(
     install_requires=requirements,
     entry_points={
         'mxio.plugins': [
-            'CBF = mxio.plugins.cbf',
-            'HDF5 = mxio.plugins.hdf5',
-            'MARCCD = mxio.plugins.marccd',
-            'RAXIS = mxio.plugins.raxis',
-            'SMV = mxio.plugins.smv',
-            'NEXUS = mxio.plugins.nexus',
+            'CBF = mxio.formats.cbf',
+            'HDF5 = mxio.formats.hdf5',
+            'MARCCD = mxio.formats.marccd',
+            'RAXIS = mxio.formats.raxis',
+            'SMV = mxio.formats.smv',
+            'NEXUS = mxio.formats.nexus',
         ]
     },
     classifiers=[

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Tuple, Union, BinaryIO
 from numpy.typing import NDArray
 
-from mxio.dataset import DataSet, XYPair
+from mxio import DataSet, XYPair
 
 __all__ = [
     "RAXISDataSet"

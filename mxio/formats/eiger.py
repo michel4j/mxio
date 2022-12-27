@@ -1,127 +1,103 @@
+import hashlib
 import json
-import zmq
+from pathlib import Path
+from typing import Tuple, Union, Sequence, BinaryIO
 
-import cv2
 import lz4.block
 import lz4.frame
 import numpy
+import zmq
+from numpy.typing import NDArray
 
-from . import DataSet
-from ..log import get_module_logger
-from ..misc import bshuf
+from mxio import DataSet, XYPair, HeaderAttrs, ImageFrame
+from mxio.misc import bshuf
 
-# Configure Logging
-logger = get_module_logger('mxio')
-
-SIZES = {
-    'uint16': 2,
-    'uint32': 4
-}
 
 TYPES = {
-    'uint16': numpy.int16,
-    'uint32': numpy.int32
+    'uint16': numpy.dtype('uint16'),
+    'uint32': numpy.dtype('uint32'),
 }
 
 HEADER_FIELDS = {
-    'detector_type': 'description',
+    'detector': 'description',
     'serial_number': 'detector_number',
     'two_theta': 'two_theta_start',
-    'pixel_size': 'x_pixel_size',
-    'exposure_time': 'count_time',
-    'exposure_period': 'frame_time',
+    'pixel_size': ('x_pixel_size', 'y_pixel_size'),
+    'exposure': 'count_time',
     'wavelength': 'wavelength',
     'distance': 'detector_distance',
-    'beam_center': ('beam_center_x', 'beam_center_y'),
-    'energy': 'photon_energy',
+    'center': ('beam_center_x', 'beam_center_y'),
     'sensor_thickness': 'sensor_thickness',
-    'detector_size': ('x_pixels_in_detector', 'y_pixels_in_detector'),
+    'size': ('x_pixels_in_detector', 'y_pixels_in_detector'),
 
 }
+
 CONVERTERS = {
     'pixel_size': lambda v: float(v) * 1000,
-    'exposure_time': float,
+    'exposure': float,
     'wavelength': float,
     'distance': lambda v: float(v) * 1000,
-    'beam_center': float,
+    'center': float,
     'saturated_value': int,
     'num_frames': int,
-    'date': 'data_collection_date',
-    'energy': float,
     'sensor_thickness': lambda v: float(v) * 1000,
-    'detector_size': int,
+    'size': int,
 }
 
 
 class EigerStream(DataSet):
-    def __init__(self, name="Stream"):
-        super().__init__()
-        self.name = name
-        self._start_angle = 0.0
+    global_header: dict
 
-    def read_dataset(self):
+    @classmethod
+    def identify(cls, file: BinaryIO, extension: str) -> Tuple[str, ...]:
+        # does not support files so return empty tuple.
+        return ()
+
+    def setup(self):
         # dummy method, does nothing for Eiger Stream
         pass
 
-    def read_header(self, message):
+    def read_file(self, filename: Union[str, Path]) -> Tuple[HeaderAttrs, NDArray]:
+        # dummy method, does nothing for Eiger Stream
+        raise RuntimeError("Eiger Stream does not support file reads.")
+
+    def parse_header(self, message: Sequence[bytes]):
         """
         Read header information from Eiger Stream and update dataset header
 
         :param message:  multipart message of htype 'dheader-1.0'
         """
-        header = json.loads(message[1])
+        preamble = json.loads(message[0])
+        info = json.loads(message[1])
+
         metadata = {}
         for key, field in HEADER_FIELDS.items():
             converter = CONVERTERS.get(key, lambda v: v)
             try:
                 if not isinstance(field, (tuple, list)):
-                    metadata[key] = converter(header[field])
+                    metadata[key] = converter(info[field])
                 else:
-                    metadata[key] = tuple(converter(header[sub_field]) for sub_field in field)
+                    metadata[key] = tuple(converter(info[sub_field]) for sub_field in field)
             except ValueError:
                 pass
 
         # try to find oscillation axis and parameters as first non-zero average
         for axis in ['chi', 'kappa', 'omega', 'phi']:
-            if header.get('{}_increment'.format(axis), 0) > 0:
-                metadata['rotation_axis'] = axis
-                metadata['start_angle'] = header['{}_start'.format(axis)]
-                metadata['delta_angle'] = header['{}_increment'.format(axis)]
-                metadata['num_images'] = header['nimages']*header['ntrigger']
-                metadata['total_angle'] = metadata['num_images'] * metadata['delta_angle']
+            if info.get('{}_increment'.format(axis), 0) > 0:
+                metadata['start_angle'] = info['{}_start'.format(axis)]
+                metadata['delta_angle'] = info['{}_increment'.format(axis)]
+                self.series = numpy.arange(info['nimages'] * info['ntrigger']) + 1
                 break
-        self._start_angle = metadata['start_angle']
-        self.header = metadata
 
-    def read_image(self, message):
+        self.name = f'series-{preamble["series"]}'
+        self.global_header = metadata
+        self.identifier = hashlib.blake2s(
+            bytes(self.directory) + self.name.encode('utf-8'), digest_size=16
+        ).hexdigest()
+
+    def parse_image(self, message: Sequence[bytes]):
         """
-        Read image information from Eiger Stream and update dataset data
-
-        :param message:  multipart message from stream of htype='dimage-1.0'
-        """
-        metadata, data = self.parse_image(message)
-        self.header.update(metadata)
-        stats_data = data[(data >= 0) & (data < metadata['saturated_value'])]
-
-        try:
-            avg, stdev = numpy.ravel(cv2.meanStdDev(stats_data))
-        except Exception as e:
-            avg = stdev = 0.0
-            logger.warning(f'Error calculating frame statistics: {e}')
-
-        metadata.update({
-            'average_intensity': avg,
-            'std_dev': stdev,
-            'min_intensity': stats_data.min(),
-            'max_intensity': stats_data.max(),
-        })
-        self.data = data
-        self.stats_data = stats_data
-        self.header.update(metadata)
-
-    def parse_image(self, message):
-        """
-        Parse image information from Eiger Stream without updating internal state
+        Parse image information from Eiger Stream state
 
         :param message:  multipart message from stream of htype='dimage-1.0'
 
@@ -131,39 +107,46 @@ class EigerStream(DataSet):
         """
 
         info = json.loads(message[0])
-        frame = json.loads(message[1])
+        metadata = json.loads(message[1])
         img_data = message[2]
 
-        dtype = numpy.dtype(frame['type'])
-        shape = frame['shape'][::-1]
+        dtype = numpy.dtype(metadata['type'])
+        shape = metadata['shape'][::-1]
         size = numpy.prod(shape)
-        dtype = dtype.newbyteorder(frame['encoding'][-1]) if frame['encoding'][-1] in ['<', '>'] else dtype
-        frame_number = int(info['frame']) + 1
-        metadata = {
-            'data_series': info['series'],
-            'saturated_value': 1e6,
-            'overloads': 0,
-            'frame_number': frame_number,
+        dtype = dtype.newbyteorder(metadata['encoding'][-1]) if metadata['encoding'][-1] in ['<', '>'] else dtype
+        index = int(info['frame']) + 1
+        header = {
+            'format': 'Eiger Stream',
+            'detector': self.global_header['description'],
+            'two_theta': self.global_header['two_theta'],
+            'pixel_size': XYPair(*self.global_header['pixel_size']),
+            'size': XYPair(*self.global_header['size']),
+            'exposure': self.global_header['exposure'],
+            'cutoff_value': 1e6,
             'filename': f"{self.name}-{info['series']}",
+            'wavelength': info['wavelength'],
+            'distance': info['distance'] * 1000,
+            'center': XYPair(*info['center']),
             'name': f"{self.name}-{info['series']}",
-            'start_angle': self._start_angle + frame_number * self.header['delta_angle'],
+
+            'start_angle': self.global_header['start_angle'] + index * self.global_header['delta_angle'],
+            'delta_angle': 0.0,
+            'sensor_thickness': 0.0,
         }
 
         try:
-            if frame['encoding'].startswith('lz4'):
+            if metadata['encoding'].startswith('lz4'):
                 arr_bytes = lz4.block.decompress(img_data, uncompressed_size=size * dtype.itemsize)
-                mdata = numpy.frombuffer(arr_bytes, dtype=dtype).reshape(*shape)
-            elif frame['encoding'].startswith('bs'):
-                mdata = bshuf.decompress_lz4(img_data[12:], shape, dtype)
+                raw_data = numpy.frombuffer(arr_bytes, dtype=dtype).reshape(*shape)
+            elif metadata['encoding'].startswith('bs'):
+                raw_data = bshuf.decompress_lz4(img_data[12:], shape, dtype)
             else:
-                raise RuntimeError(f'Unknown encoding {frame["encoding"]}')
-            data = mdata.view(TYPES[frame['type']])
-
-        except Exception as e:
+                raise RuntimeError(f'Unknown encoding {metadata["encoding"]}')
+            data = raw_data.view(TYPES[metadata['type']])
+        except Exception:
             data = None
-            logger.error(f'Error decoding stream: {e}')
 
-        return metadata, data
+        self.set_frame(header, data, index)
 
 
 def multiplexer(address, port):
@@ -172,19 +155,16 @@ def multiplexer(address, port):
     This allows multiple ZMQ clients to access the same data.
     """
 
-    try:
-        context = zmq.Context()
-        backend = context.socket(zmq.PULL)
-        backend.connect(address)
-        frontend = context.socket(zmq.PUB)
-        frontend.bind(f"tcp://*:{port}")
+    context = zmq.Context()
+    backend = context.socket(zmq.PULL)
+    backend.connect(address)
+    frontend = context.socket(zmq.PUB)
+    frontend.bind(f"tcp://*:{port}")
 
+    try:
         print(f'Starting ZMQ PULL Multiplexer proxying messages from {address} to {port} ...')
         zmq.device(zmq.STREAMER, frontend, backend)
-    except Exception as e:
-        pass
     finally:
         frontend.close()
         backend.close()
         context.term()
-
