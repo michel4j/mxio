@@ -14,41 +14,17 @@ from mxio import DataSet, XYPair
 __all__ = [
     "HDF5DataSet",
     "hdf5_file_parts",
-    "CONVERTERS"
+    "CONVERTERS",
+    "NUMBER_FORMATS"
 ]
 
-HEADER_FIELDS = {
-    'detector': '/entry/instrument/detector/description',
-    'serial_number': '/entry/instrument/detector/detector_number',
-    'two_theta': '/entry/instrument/detector/goniometer/two_theta',
-    'pixel_size': (
-        '/entry/instrument/detector/x_pixel_size',
-        '/entry/instrument/detector/y_pixel_size',
-    ),
-    'exposure': '/entry/instrument/detector/count_time',
-    'wavelength': '/entry/instrument/beam/incident_wavelength',
-    'distance': '/entry/instrument/detector/detector_distance',
-    'center': (
-        '/entry/instrument/detector/beam_center_x',
-        '/entry/instrument/detector/beam_center_y'
-    ),
-    'cutoff_value': '/entry/instrument/detector/detectorSpecific/countrate_correction_count_cutoff',
-    'sensor_thickness': '/entry/instrument/detector/sensor_thickness',
-    'size': (
-        '/entry/instrument/detector/detectorSpecific/x_pixels_in_detector',
-        '/entry/instrument/detector/detectorSpecific/y_pixels_in_detector'
-    ),
+NUMBER_FORMATS = {
+    'uint16': numpy.dtype(numpy.int16),
+    'uint32': numpy.dtype(numpy.int32),
+    'uint64': numpy.dtype(numpy.int64),
+    'int32': numpy.dtype(numpy.int32),
+    'int64': numpy.dtype(numpy.int32),
 }
-OMEGA_FIELD = '/entry/sample/goniometer/omega'
-MASK_FIELD = '/entry/instrument/detector/detectorSpecific/pixel_mask'
-ARRAY_FIELDS = [
-    'two_theta', 'omega', 'chi', 'phi', 'kappa'
-]
-OSCILLATION_FIELDS = {
-    'start': '/entry/sample/goniometer/{}',
-    'delta': '/entry/sample/goniometer/{}_range_average'
-}
-
 
 def save_array(name, data):
     """
@@ -94,6 +70,37 @@ class HDF5DataSet(DataSet):
     file: h5py.File
     data_sections: Sequence[str]
     max_section_size: int
+    format: str
+    omega_field: str = '/entry/sample/goniometer/omega'
+    array_fields: tuple = ('two_theta', 'omega', 'chi', 'phi', 'kappa')
+    header_fields: dict = {
+        'detector': '/entry/instrument/detector/description',
+        'serial_number': '/entry/instrument/detector/detector_number',
+        'two_theta': '/entry/instrument/detector/goniometer/two_theta',
+        'pixel_size': (
+            '/entry/instrument/detector/x_pixel_size',
+            '/entry/instrument/detector/y_pixel_size',
+        ),
+        'exposure': '/entry/instrument/detector/count_time',
+        'wavelength': '/entry/instrument/beam/incident_wavelength',
+        'distance': '/entry/instrument/detector/detector_distance',
+        'center': (
+            '/entry/instrument/detector/beam_center_x',
+            '/entry/instrument/detector/beam_center_y'
+        ),
+        'cutoff_value': '/entry/instrument/detector/detectorSpecific/countrate_correction_count_cutoff',
+        'sensor_thickness': '/entry/instrument/detector/sensor_thickness',
+        'size': (
+            '/entry/instrument/detector/detectorSpecific/x_pixels_in_detector',
+            '/entry/instrument/detector/detectorSpecific/y_pixels_in_detector'
+        ),
+    }
+    oscillation_fields: dict = {
+        'start': '/entry/sample/goniometer/{}',
+        'delta': '/entry/sample/goniometer/{}_range_average'
+    }
+    format: str = 'HDF5'
+
 
     @classmethod
     def identify(cls, file: BinaryIO, extension: str) -> Tuple[str, ...]:
@@ -115,9 +122,10 @@ class HDF5DataSet(DataSet):
             self.template = f'{self.reference}/{{field:>06}}'
 
         self.file = h5py.File(self.directory.joinpath(self.reference), 'r')
-
-        frame_count = self.extract_field(OMEGA_FIELD, array=True).size
+        self.format = 'HDF5'
+        frame_count = self.extract_field(self.omega_field, array=True).size
         self.series = numpy.arange(frame_count) + 1
+        self.size = frame_count
         self.data_sections = list(self.file['/entry/data'].keys())
         self.max_section_size = int(numpy.ceil(frame_count / len(self.data_sections)))
         self.get_frame(self.index)
@@ -142,10 +150,10 @@ class HDF5DataSet(DataSet):
             converter = CONVERTERS.get(key, lambda v: v)
             try:
                 if not isinstance(field, (tuple, list)):
-                    header[key] = converter(self.extract_field(field, array=(key in ARRAY_FIELDS)))
+                    header[key] = converter(self.extract_field(field, array=(key in self.array_fields)))
                 else:
                     header[key] = tuple(
-                        converter(self.extract_field(sub_field, array=(key in ARRAY_FIELDS)))
+                        converter(self.extract_field(sub_field, array=(key in self.array_fields)))
                         for sub_field in field
                     )
             except (ValueError, KeyError) as err:
@@ -178,8 +186,8 @@ class HDF5DataSet(DataSet):
         assert (reference, directory) == (self.reference, self.directory), "Invalid data archive"
         assert index in self.series, f"Frame {index} does not exist in this archive"
 
-        header = self.parse_header(HEADER_FIELDS, OSCILLATION_FIELDS)
-        header['format'] = 'HDF5'
+        header = self.parse_header(self.header_fields, self.oscillation_fields)
+        header['format'] = self.format
 
         section_index, frame_index = divmod(index, self.max_section_size)
         assert section_index < len(self.data_sections), f"Section {section_index} does not exist"
@@ -193,5 +201,5 @@ class HDF5DataSet(DataSet):
         assert path.exists(), f"External data link file {section_file} could not be found"
         data = self.extract_field(key, array=True, index=frame_index)
 
-        return header, data
+        return header, data.view(NUMBER_FORMATS[str(data.dtype)])
 

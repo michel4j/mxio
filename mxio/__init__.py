@@ -64,6 +64,7 @@ class HeaderAttrs(TypedDict):
     cutoff_value: float
     maximum: float
     minimum: float
+    sigma: float
     average: float
     overloads: int
     sensor_thickness: float
@@ -88,6 +89,7 @@ class ImageFrame:
     maximum: Optional[float] = field(repr=False, default=0.0)
     minimum: Optional[float] = field(repr=False, default=0.0)
     average: Optional[float] = field(repr=False, default=0.0)
+    sigma: Optional[float] = field(repr=False, default=1.0)
     overloads: Optional[int] = field(repr=False, default=0)
     sensor_thickness: Optional[float] = field(repr=False, default=0.0)
     data: Union[NDArray, None] = field(repr=False, default=None)
@@ -227,7 +229,7 @@ class DataSet(ABC):
         :return: A concrete dataset class or None and a tuple of tags
         """
 
-        for plugin in entry_points(group='mxio.formats'):
+        for plugin in entry_points(group='mxio.plugins'):
             plugin.load()
 
         for base_cls in cls.__subclasses__():
@@ -289,11 +291,12 @@ class DataSet(ABC):
         if any(key not in header for key in ("average", "minimum", "maximum", "overloads")):
             w, h = numpy.array(data.shape) // 2
             stats_data = data[:h, :w]
-            mask = stats_data > 0
+            mask = (stats_data > 0)
             header.update({
-                "maximum": stats_data[mask].max(),
+                "maximum": numpy.percentile(stats_data[mask], 95.),
                 "average": stats_data[mask].mean(),
                 "minimum": stats_data[mask].min(),
+                "sigma": stats_data[mask].std(),
                 "overloads": 4 * (stats_data[mask] >= header['cutoff_value']).sum()
             })
 
@@ -338,7 +341,7 @@ class DataSet(ABC):
         ...
 
 
-def read_image(path: str) -> Union[ImageFrame, None]:
+def read_image(path: str) -> Union[DataSet, None]:
     """
     Determine the file type open the image using the correct image IO
     back-end, and return an image frame
@@ -346,7 +349,7 @@ def read_image(path: str) -> Union[ImageFrame, None]:
     """
 
     dset = DataSet.new_from_file(path)
-    return dset.frame
+    return dset
 
 
 def read_header(path) -> HeaderAttrs:
