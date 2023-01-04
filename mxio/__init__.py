@@ -288,16 +288,24 @@ class DataSet(ABC):
         """
 
         # calculate statistics if missing in header
-        if any(key not in header for key in ("average", "minimum", "maximum", "overloads")):
+        if any(key not in header for key in ("average", "minimum", "maximum", "overloads", "sigma")):
             w, h = numpy.array(data.shape) // 2
-            stats_data = data[:h, :w]
-            mask = (stats_data > 0)
+            quadrant_data = data[:h, :w]
+            mask = (quadrant_data > 0)
+            stats_data = quadrant_data[mask] if mask.sum() > 0 else quadrant_data
+
+            average = stats_data.mean()
+            maximum = stats_data.max()
+            minimum = stats_data.min()
+            residuals = (stats_data - average).ravel()
+            sigma = numpy.sqrt(numpy.dot(residuals, residuals)/stats_data.size)
+
             header.update({
-                "maximum": numpy.percentile(stats_data[mask], 95.),
-                "average": stats_data[mask].mean(),
-                "minimum": stats_data[mask].min(),
-                "sigma": stats_data[mask].std(),
-                "overloads": 4 * (stats_data[mask] >= header['cutoff_value']).sum()
+                "maximum": maximum,
+                "average": average,
+                "minimum": minimum,
+                "sigma": sigma,
+                "overloads": (data >= header['cutoff_value']).sum()
             })
 
         frame = ImageFrame(**header, data=data)

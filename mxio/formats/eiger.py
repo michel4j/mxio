@@ -14,8 +14,11 @@ from mxio.misc import bshuf
 
 
 TYPES = {
-    'uint16': numpy.dtype('uint16'),
-    'uint32': numpy.dtype('uint32'),
+    'uint16': numpy.dtype(numpy.int16),
+    'uint32': numpy.dtype(numpy.int32),
+    'uint64': numpy.dtype(numpy.int64),
+    'int32': numpy.dtype(numpy.int32),
+    'int64': numpy.dtype(numpy.int32),
 }
 
 HEADER_FIELDS = {
@@ -29,7 +32,7 @@ HEADER_FIELDS = {
     'center': ('beam_center_x', 'beam_center_y'),
     'sensor_thickness': 'sensor_thickness',
     'size': ('x_pixels_in_detector', 'y_pixels_in_detector'),
-
+    'count_cutoff': ('bit_depth_readout', 'nframes_sum'),
 }
 
 CONVERTERS = {
@@ -38,7 +41,6 @@ CONVERTERS = {
     'wavelength': float,
     'distance': lambda v: float(v) * 1000,
     'center': float,
-    'saturated_value': int,
     'num_frames': int,
     'sensor_thickness': lambda v: float(v) * 1000,
     'size': int,
@@ -86,10 +88,13 @@ class EigerStream(DataSet):
             if info.get('{}_increment'.format(axis), 0) > 0:
                 metadata['start_angle'] = info['{}_start'.format(axis)]
                 metadata['delta_angle'] = info['{}_increment'.format(axis)]
-                self.series = numpy.arange(info['nimages'] * info['ntrigger']) + 1
                 break
 
+        metadata['count_cutoff'] = 2**metadata['count_cutoff'][0] * metadata['count_cutoff'][1]
+
         self.name = f'series-{preamble["series"]}'
+        self.size = info['nimages'] * info['ntrigger']
+        self.series = numpy.arange(self.size) + 1
         self.global_header = metadata
         self.identifier = hashlib.blake2s(
             bytes(self.directory) + self.name.encode('utf-8'), digest_size=16
@@ -110,40 +115,40 @@ class EigerStream(DataSet):
         metadata = json.loads(message[1])
         img_data = message[2]
 
-        dtype = numpy.dtype(metadata['type'])
+        data_type = numpy.dtype(metadata['type'])
         shape = metadata['shape'][::-1]
         size = numpy.prod(shape)
-        dtype = dtype.newbyteorder(metadata['encoding'][-1]) if metadata['encoding'][-1] in ['<', '>'] else dtype
+        data_type = data_type.newbyteorder(metadata['encoding'][-1]) if metadata['encoding'][-1] in ['<', '>'] else data_type
         index = int(info['frame']) + 1
         header = {
             'format': 'Eiger Stream',
-            'detector': self.global_header['description'],
+            'detector': self.global_header['detector'],
             'two_theta': self.global_header['two_theta'],
             'pixel_size': XYPair(*self.global_header['pixel_size']),
             'size': XYPair(*self.global_header['size']),
             'exposure': self.global_header['exposure'],
-            'cutoff_value': 1e6,
-            'filename': f"{self.name}-{info['series']}",
-            'wavelength': info['wavelength'],
-            'distance': info['distance'] * 1000,
-            'center': XYPair(*info['center']),
-            'name': f"{self.name}-{info['series']}",
-
+            'cutoff_value': 2.8e6, #self.global_header['count_cutoff'],
+            'filename': self.name,
+            'wavelength': self.global_header['wavelength'],
+            'distance': self.global_header['distance'],
+            'center': XYPair(*self.global_header['center']),
             'start_angle': self.global_header['start_angle'] + index * self.global_header['delta_angle'],
             'delta_angle': 0.0,
-            'sensor_thickness': 0.0,
+            'sensor_thickness': self.global_header['sensor_thickness'],
         }
+
 
         try:
             if metadata['encoding'].startswith('lz4'):
-                arr_bytes = lz4.block.decompress(img_data, uncompressed_size=size * dtype.itemsize)
-                raw_data = numpy.frombuffer(arr_bytes, dtype=dtype).reshape(*shape)
+                arr_bytes = lz4.block.decompress(img_data, uncompressed_size=size * data_type.itemsize)
+                raw_data = numpy.frombuffer(arr_bytes, dtype=data_type).reshape(*shape)
             elif metadata['encoding'].startswith('bs'):
-                raw_data = bshuf.decompress_lz4(img_data[12:], shape, dtype)
+                raw_data = bshuf.decompress_lz4(img_data[12:], shape, data_type)
             else:
                 raise RuntimeError(f'Unknown encoding {metadata["encoding"]}')
             data = raw_data.view(TYPES[metadata['type']])
-        except Exception:
+        except Exception as e:
+            print(f'Error parsing frame data {e}')
             data = None
 
         self.set_frame(header, data, index)
