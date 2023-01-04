@@ -210,11 +210,14 @@ class DataSet(ABC):
         :return: DataSet instance
         """
 
-        with open(filename, 'rb') as file:
-            name, extension = os.path.splitext(filename)
+        test_path = Path(filename)
+        test_path = test_path.parent if re.match(r'^\d+$', test_path.name) else test_path
+
+        with open(test_path, 'rb') as file:
+            name, extension = os.path.splitext(test_path)
             format_cls, tags = cls.get_format(file, extension)
             if format_cls is None:
-                raise UnknownDataFormat(f"File {filename} not understood by any available file format plugins!")
+                raise UnknownDataFormat(f"File {test_path} not understood by any available file format plugins!")
             else:
                 return format_cls(filename, tags=tags)
 
