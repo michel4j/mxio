@@ -111,6 +111,7 @@ class DataSet(ABC):
     identifier: str
     template: str
     reference: str
+    glob: str
     index: int
     size: int
     tags: Tuple[str, ...]
@@ -173,6 +174,7 @@ class DataSet(ABC):
             frame_pattern = re.compile(
                 r'^{name}{separator}(\d{{{width}}}){extension}$'.format(width=width, **params)
             )
+            glob = '{name}{separator}{wildcard}{extension}'.format(width=width, wildcard='?'*width, **params)
             frames = numpy.array([
                 int(frame_match.group(1)) for file_name in self.directory.iterdir()
                 for frame_match in [frame_pattern.match(file_name.name)]
@@ -184,9 +186,11 @@ class DataSet(ABC):
             name = ""
             index = 0
             template = ""
+            glob = ""
             frames = numpy.array([])
 
         self.name = name
+        self.glob = glob
         self.index = index
         self.template = template
         self.series = frames

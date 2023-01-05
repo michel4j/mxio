@@ -112,7 +112,7 @@ class HDF5DataSet(DataSet):
         image_path = self.directory.joinpath(self.reference)
         self.index, self.reference, self.directory = hdf5_file_parts(image_path)
         pattern = re.compile(
-            r'^(?P<name>.+?)(?P<separator>[._-]?)(?P<field>((data_)?\d+)|(master))\.(?P<extension>(\w+))'
+            r'^(?P<name>.+?)(?P<separator>[._-]?)(?P<field>((data_)?\d{4,})|(master))\.(?P<extension>(\w+))'
         )
         matched = pattern.match(self.reference)
         if matched:
@@ -120,6 +120,7 @@ class HDF5DataSet(DataSet):
             self.name = params['name']
             self.reference = f'{self.name}{params["separator"]}master.{params["extension"]}'
             self.template = f'{self.reference}/{{field:>06}}'
+            self.glob = self.reference.replace('master', '??????')
 
         self.file = h5py.File(self.directory.joinpath(self.reference), 'r')
         self.format = 'HDF5'

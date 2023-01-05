@@ -54,18 +54,20 @@ class NXSDataSet(HDF5DataSet):
         image_path = self.directory.joinpath(self.reference)
         self.index, self.reference, self.directory = hdf5_file_parts(image_path)
         pattern = re.compile(
-            r'^(?P<name>.+?)(?P<field>[_-]((data_)?\d+)|(master))\.(?P<extension>(\w+))'
+            r'^(?P<name>.+?)(?P<separator>[._-]?)(?P<field>((data_)?\d{4,})|(master))\.(?P<extension>(\w+))'
         )
         matched = pattern.match(self.reference)
         if matched:
             params = matched.groupdict()
             self.name = params['name']
+            self.reference = f'{self.name}{params["separator"]}master.h5'
             self.template = f'{self.reference}/{{field:>06}}'
+            self.glob = self.reference.replace('master', '??????')
 
         self.file = h5py.File(self.directory.joinpath(self.reference), 'r')
         frame_count = self.extract_field(self.omega_field, array=True).size
         self.data_sections = [
-            section for section in self.file['/entry/data'].keys() if re.match(r'data_\d+', section)
+            section for section in self.file['/entry/data'].keys() if re.match(r'data_\d{4,}', section)
         ]
         self.max_section_size = int(numpy.ceil(frame_count / len(self.data_sections)))
         self.series = numpy.arange(frame_count) + 1
