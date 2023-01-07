@@ -62,12 +62,12 @@ class SMVDataSet(DataSet):
             header['cutoff_value'] = int(info.get('ccd_image_saturation', 2 ** (8 * data_type.itemsize) - 1))
 
             header['detector'] = {
-                (2048, 0.050): 'Q105',
-                (2048, 0.102): 'Q210',
-                (4096, 0.051): 'Q210',
-                (2304, 0.082): 'Q4',
-                (3072, 0.103): 'Q315',
-                (6144, 0.051): 'Q315',
+                (2048, 0.050): 'ADSC Q105',
+                (2048, 0.102): 'ADSC Q210',
+                (4096, 0.051): 'ADSC Q210',
+                (2304, 0.082): 'ADSC Q4',
+                (3072, 0.103): 'ADSC Q315',
+                (6144, 0.051): 'ADSC Q315',
                 (2048, 0.078): 'NOIR-1',
                 (1500, 0.200): 'RAXIS4',
                 (3000, 0.100): 'RAXIS4',

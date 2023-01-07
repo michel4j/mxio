@@ -57,7 +57,7 @@ class MarCCDDataSet(DataSet):
         }
 
         det_mm = int(round(header['pixel_size'].x * header['size'].x))
-        header['detector'] = f'MX{det_mm:d}'
+        header['detector'] = f'Rayonix MX{det_mm:d}'
         header['format'] = 'TIFF'
 
         data = cv2.imread(str(filename), -1)
