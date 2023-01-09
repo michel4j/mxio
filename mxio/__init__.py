@@ -274,7 +274,9 @@ class DataSet(ABC):
 
         :return: ImageFrame | None if there is no next frame in the sequence
         """
-        return self.get_frame(self.index + 1)
+        next_pos = numpy.searchsorted(self.series, self.index) + 1
+        if next_pos < len(self.series):
+            return self.get_frame(self.series[next_pos])
 
     def prev_frame(self) -> Union[ImageFrame, None]:
         """
@@ -283,7 +285,11 @@ class DataSet(ABC):
 
         :return: ImageFrame | None if there is no previous frame in the sequence
         """
-        return self.get_frame(self.index - 1)
+
+        prev_pos = numpy.searchsorted(self.series, self.index) - 1
+        if prev_pos >= 0:
+            return self.get_frame(self.series[prev_pos])
+
 
     def set_frame(self, header: HeaderAttrs, data: NDArray, index: int = 1):
         """
