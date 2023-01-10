@@ -367,7 +367,7 @@ class CBFDataSet(DataSet):
 
             if result == 0 and mini_cbf_type.value != b'XDS special':
                 specs = HEADER_SPECS[mini_cbf_type.value.decode('utf-8')]
-                info = parser.parse_section(specs, mini_cbf_header.value.decode('utf-8'))
+                info = parser.parse_text(specs, mini_cbf_header.value.decode('utf-8'))
                 pixel_size = list(map(lambda v: v * 1000, info['pixel_size']))
                 header['detector'] = info['detector'].strip()
                 header['two_theta'] = 0 if not info['two_theta'] else round(info['two_theta'], 2)

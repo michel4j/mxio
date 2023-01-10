@@ -1,14 +1,15 @@
-import os
+
 import re
+from pathlib import Path
 from collections import defaultdict
+from typing import Union, List, Tuple
 
-import yaml
 
-SPEC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 ESCAPE_CHARS = ")("
 
 
 class ConverterType(type):
+    """Convert Metaclass"""
     def __init__(cls, *args, **kwargs):
         super(ConverterType, cls).__init__(*args, **kwargs)
         if not hasattr(cls, 'registry'):
@@ -30,9 +31,7 @@ class ConverterType(type):
 
 
 class Converter(object, metaclass=ConverterType):
-    """
-    Converter Base Class
-    """
+    """Converter Base Class"""
 
 
 class Int(Converter):
@@ -77,7 +76,7 @@ def escape(text):
     return text
 
 
-def build(pattern):
+def build_pattern(pattern: str) -> Tuple[re.Pattern, List[dict]]:
     """
     Parse the text and generate the corresponding regex expression, replacing all fields
     :param pattern: parser specification
@@ -125,9 +124,17 @@ def build(pattern):
     return re.compile(pattern), variables
 
 
-def parse_fields(spec, text):
+def parse_fields(spec: str, text: str) -> dict:
+    """
+    Execute an atomic parser field specification on a text file and return a dictionary of results with proper key-value pairs
+    of the right type.
+    :param spec: A field specification string. For example: ""CRYSTAL MOSAICITY (DEGREES) <float:mosaicity>""
+    :param text: string to parse
+    :return: dictionary of matched key value pairs.
+    """
+
     groups = defaultdict(list)
-    regex, variables = build(spec)
+    regex, variables = build_pattern(spec)
     converters = {variable['key']: variable['converter'] for variable in variables}
     for variable in variables:
         groups[variable['name']].append(variable['key'])
@@ -142,32 +149,38 @@ def parse_fields(spec, text):
     return {}
 
 
-def parse_section(section, data):
-    data_patt = re.compile(r'({}.+?{})'.format(section.get('start', '^'), section.get('end', '$')), re.DOTALL)
-    m = data_patt.search(data)
+def parse_text(specs: dict, text: str) -> dict:
+    """
+    Execute nested parser specification hierarchy on a text file and return the corresponding nested dictionary of
+    matched key-value pairs
+    :param specs: A nested dictionary of specifications
+    :param text: text file
+    :return: nested dictionary of key-value pairs
+    """
+
+    data_patt = re.compile(r'({}.+?{})'.format(specs.get('start', '^'), specs.get('end', '$')), re.DOTALL)
+    m = data_patt.search(text)
     output = {}
     if m:
         sub_data = m.group(0)
-        if 'fields' in section:
-            if isinstance(section['fields'], list):
-                for spec in section['fields']:
+        if 'fields' in specs:
+            if isinstance(specs['fields'], list):
+                for spec in specs['fields']:
                     output.update(parse_fields(spec, sub_data))
-            elif isinstance(section['fields'], dict):
-                for sub_name, sub_section in section['fields'].items():
-                    output[sub_name] = parse_section(sub_section, sub_data)
+            elif isinstance(specs['fields'], dict):
+                for sub_name, sub_section in specs['fields'].items():
+                    output[sub_name] = parse_text(sub_section, sub_data)
     return output
 
 
-def parse_text(data, spec_name):
-
-    spec_file = '{}.yml'.format(spec_name)
-    with open(os.path.join(SPEC_PATH, spec_file), 'r') as handle:
-        specs = yaml.safe_load(handle)
-
-    return parse_section(specs['root'], data)
-
-
-def parse(data_file, spec_name, size=-1):
+def parse_file(data_file: Union[str, Path], specs: dict, size: int = -1) -> dict:
+    """
+    Parse a text file and return the matched dictionary
+    :param data_file: file path or name
+    :param specs: A nested dictionary of specifications
+    :param size: maximum size of file to parse in bytes
+    :return: nested dictionary of key-value pairs
+    """
     with open(data_file, 'r') as handle:
-        data = handle.read(size)
-    return parse_text(data, spec_name)
+        text = handle.read(size)
+    return parse_text(specs, text)
