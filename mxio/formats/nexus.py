@@ -45,7 +45,8 @@ class NXSDataSet(HDF5DataSet):
             try:
                 f = h5py.File(file, 'r')
                 value = f['/entry/definition'][()]
-            except:
+            except Exception:
+                # deliberately ignoring any errors during file type identification.
                 return ()
             else:
                 return "NEXUS",

@@ -114,6 +114,7 @@ HEADER_SPECS = {
     }
 }
 
+
 def unit_vector(vector):
     """ Returns the unit vector of the vector.  """
     return vector / numpy.linalg.norm(vector)
