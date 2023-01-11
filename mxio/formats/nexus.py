@@ -54,11 +54,13 @@ class NXSDataSet(HDF5DataSet):
         image_path = self.directory.joinpath(self.reference)
         self.index, self.reference, self.directory = hdf5_file_parts(image_path)
         pattern = re.compile(
-            r'^(?P<name>.+?)(?P<separator>[._-]?)(?P<field>((data_)?\d{4,})|(master))\.(?P<extension>(\w+))'
+            r'^(?P<name>.+?)(?P<separator>[._-])?(?P<field>((data_)?\d{4,})|(master))?\.(?P<extension>(\w+))'
         )
         matched = pattern.match(self.reference)
         if matched:
             params = matched.groupdict()
+            if params['extension'] == 'nxs':
+                params['separator'] = '_'
             self.name = params['name']
             self.reference = f'{self.name}{params["separator"]}master.h5'
             self.template = f'{self.reference}/{{field:>06}}'
