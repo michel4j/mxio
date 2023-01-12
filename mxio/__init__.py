@@ -160,39 +160,19 @@ class DataSet(ABC):
         'name', 'index', 'regex', 'template', 'frame' and 'sweeps'
         """
 
-        pattern = re.compile(
-            r'^(?P<name>[\w_-]+?)(?P<separator>[._-]?)'
-            r'(?P<field>\d{3,12})(?P<extension>(?:\.\D\w+)?)$'
-        )
-        matched = pattern.match(self.reference)
-        if matched:
-            params = matched.groupdict()
-            width = len(params['field'])
-            name = params['name']
-            index = int(params['field'])
-            template = '{name}{separator}{{field:>0{width}}}{extension}'.format(width=width, **params)
-            frame_pattern = re.compile(
-                r'^{name}{separator}(\d{{{width}}}){extension}$'.format(width=width, **params)
-            )
-            glob = '{name}{separator}{wildcard}{extension}'.format(width=width, wildcard='?'*width, **params)
-            frames = numpy.array([
-                int(frame_match.group(1)) for file_name in self.directory.iterdir()
-                for frame_match in [frame_pattern.match(file_name.name)]
-                if file_name.is_file() and frame_match
-            ], dtype=int)
-            frames.sort()
+        params = find_sweep(self.directory / self.reference)
+        pattern = params['pattern']
+        frames = numpy.array([
+            int(frame_match.group(1)) for file_path in self.directory.iterdir()
+            for frame_match in [pattern.match(file_path.name)]
+            if file_path.is_file() and frame_match
+        ], dtype=int)
+        frames.sort()
 
-        else:
-            name = ""
-            index = 0
-            template = ""
-            glob = ""
-            frames = numpy.array([])
-
-        self.name = name
-        self.glob = glob
-        self.index = index
-        self.template = template
+        self.name = params['name']
+        self.glob = params['glob']
+        self.index = params['index']
+        self.template = params['template']
         self.series = frames
         self.size = len(frames)
         #self.frame = self.get_frame(self.index)
@@ -292,7 +272,6 @@ class DataSet(ABC):
         if prev_pos >= 0:
             return self.get_frame(self.series[prev_pos])
 
-
     def set_frame(self, header: HeaderAttrs, data: NDArray, index: int = 1):
         """
         Set the current frame and frame index directly from a frame instance.
@@ -386,3 +365,54 @@ def read_header(path) -> HeaderAttrs:
     return asdict(dset.frame)
 
 
+def find_sweep(path: Path, name=r'[\w_-]+?') -> dict:
+    """
+    Find the disk representation of a dataset from a single frame in a series
+    :param path: full path to one image
+    :param name: optional raw regex string representing the root name of the dataset
+    :return: dictionary containing the "name", "index", "template", "glob" and compiled regex "pattern"
+    """
+
+    pattern = re.compile(
+        rf'^(?P<name>{name})'
+        r'(?P<separator>[._-]?)'
+        r'(?P<field>\d{3,12})'
+        r'(?P<extension>(?:\.\D\w+)?)$'
+    )
+    directory = path.parent
+    file_name = path.name
+
+    matched = pattern.match(file_name)
+    print('matched', matched)
+    if matched:
+        params = matched.groupdict()
+        width = len(params['field'])
+        index = int(params['field'])
+        template = '{name}{separator}{{field:>0{width}}}{extension}'.format(width=width, **params)
+        frame_pattern = re.compile(
+            r'^{name}{separator}(\d{{{width}}}){extension}$'.format(width=width, **params)
+        )
+        glob = '{name}{separator}{wildcard}{extension}'.format(width=width, wildcard='?' * width, **params)
+        name = params['name']
+        names = [
+            file_path.name for file_path in directory.iterdir()
+            if file_path.is_file() and frame_pattern.match(file_path.name)
+        ]
+        common_name = os.path.commonprefix(names)
+        if common_name == name:
+            return {
+                'name': common_name,
+                'index': index,
+                'template': template,
+                'glob': glob,
+                'pattern': frame_pattern
+            }
+        else:
+            return find_sweep(path, name=common_name)
+    return {
+        'name': '',
+        'index': 0,
+        'template': '',
+        'glob': '',
+        'pattern': pattern
+    }
