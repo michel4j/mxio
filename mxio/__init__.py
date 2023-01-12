@@ -195,7 +195,9 @@ class DataSet(ABC):
         self.template = template
         self.series = frames
         self.size = len(frames)
-        self.frame = self.get_frame(self.index)
+        #self.frame = self.get_frame(self.index)
+        header, data = self.read_file(self.directory / self.reference)
+        self.set_frame(header, data, index)
 
     @classmethod
     def save_frame(cls, file_path: Union[PathLike, str], frame: ImageFrame):

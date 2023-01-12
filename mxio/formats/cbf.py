@@ -191,7 +191,7 @@ class CBFDataSet(DataSet):
 
     @classmethod
     def identify(cls, file: BinaryIO, extension: str) -> Tuple[str, ...]:
-        magic = b'###CBF: VERSION'
+        magic = b'###CBF: '
         if file.read(len(magic)) == magic:
             return "CBF Area Detector Image",
 
