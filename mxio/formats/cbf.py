@@ -314,11 +314,11 @@ class CBFDataSet(DataSet):
         y_size = ct.c_size_t(mime_header.get('X-Binary-Size-Second-Dimension', 0))
         header['size'] = XYPair(x_size.value, y_size.value)
 
-        pixel_size = ct.c_double(1.0)
+        pixel_size = ct.c_double(0.1)
         result |= cbflib.cbf_get_pixel_size(handle, 0, 1, ct.byref(pixel_size))
         header['pixel_size'] = XYPair(pixel_size.value, pixel_size.value)
 
-        distance = ct.c_double(999.0)
+        distance = ct.c_double(250.0)
         result |= cbflib.cbf_get_detector_distance(detector, ct.byref(distance))
         header['distance'] = distance.value
 
@@ -341,14 +341,17 @@ class CBFDataSet(DataSet):
         result |= cbflib.cbf_get_overload(handle, 0, ct.byref(ovl))
         header['cutoff_value'] = ovl.value
 
-        # FIXME Calculate actual two_theta from the beam direction and detector normal
-        # vec_x, vec_y, vec_z = ct.c_double(0.0), ct.c_double(0.0), ct.c_double(0.0)
-        # result |= cbflib.cbf_get_detector_normal(detector, ct.byref(vec_x), ct.byref(vec_y), ct.byref(vec_x))
-        # detector_norm = numpy.array([vec_x.value, vec_y.value, vec_z.value])
-        #
-        # result |= cbflib.cbf_get_rotation_axis(goniometer, 0, ct.byref(vec_x), ct.byref(vec_y), ct.byref(vec_x))
-        # rot_axis = numpy.array([vec_x.value, vec_y.value, vec_z.value])
-        # header['two_theta'] = 0.0
+        # gon_x, gon_y, gon_z = ct.c_double(1.0), ct.c_double(0.0), ct.c_double(0.0)
+        # result |= cbflib.cbf_get_rotation_axis(goniometer, 0, ct.byref(gon_x), ct.byref(gon_y), ct.byref(gon_x))
+        # rot_axis = numpy.array([gon_x.value, gon_y.value, gon_z.value])
+
+        det_x, det_y, det_z = ct.c_double(0.0), ct.c_double(0.0), ct.c_double(1.0)
+        result |= cbflib.cbf_get_detector_normal(detector, ct.byref(det_x), ct.byref(det_y), ct.byref(det_z))
+        detector_norm = numpy.array([det_x.value, det_y.value, det_z.value])
+
+        beam_axis = numpy.array([0, 0, 1])
+        two_theta_radians = numpy.arccos(numpy.dot(detector_norm, beam_axis))
+        header['two_theta'] = numpy.degrees(two_theta_radians)
 
         detector_name = ct.c_char_p()
         result |= cbflib.cbf_get_detector_id(handle, 0, ct.byref(detector_name))

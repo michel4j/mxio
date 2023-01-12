@@ -175,9 +175,9 @@ class DataSet(ABC):
         self.template = params['template']
         self.series = frames
         self.size = len(frames)
-        #self.frame = self.get_frame(self.index)
+
         header, data = self.read_file(self.directory / self.reference)
-        self.set_frame(header, data, index)
+        self.set_frame(header, data, self.index)
 
     @classmethod
     def save_frame(cls, file_path: Union[PathLike, str], frame: ImageFrame):
@@ -383,7 +383,6 @@ def find_sweep(path: Path, name=r'[\w_-]+?') -> dict:
     file_name = path.name
 
     matched = pattern.match(file_name)
-    print('matched', matched)
     if matched:
         params = matched.groupdict()
         width = len(params['field'])
@@ -410,9 +409,9 @@ def find_sweep(path: Path, name=r'[\w_-]+?') -> dict:
         else:
             return find_sweep(path, name=common_name)
     return {
-        'name': '',
+        'name': file_name,
         'index': 0,
-        'template': '',
-        'glob': '',
+        'template': file_name,
+        'glob': file_name,
         'pattern': pattern
     }
