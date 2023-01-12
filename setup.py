@@ -45,6 +45,7 @@ setup(
             'RAXIS = mxio.formats.raxis',
             'SMV = mxio.formats.smv',
             'NEXUS = mxio.formats.nexus',
+            'MAR345 = mxio.formats.mar345',
         ]
     },
     classifiers=[

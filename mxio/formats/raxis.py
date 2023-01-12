@@ -85,7 +85,7 @@ class RAXISDataSet(DataSet):
             # detect endianness
             file.seek(796)
             endian_test = struct.unpack('>l', file.read(struct.calcsize('>l')))[0]
-            endian = '>' if endian_test < 20 else '>'
+            endian = '>' if endian_test < 20 else '<'
             file.seek(0)
 
             info = {

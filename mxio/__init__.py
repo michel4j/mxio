@@ -189,7 +189,7 @@ class DataSet(ABC):
         raise RuntimeWarning("This format does not support exporting")
 
     @classmethod
-    def new_from_file(cls, filename: str) -> "DataSet":
+    def new_from_file(cls, filename: Union[str, Path]) -> "DataSet":
         """Create and return an instance of a DataSet subclass providing the appropriate format
 
         :param filename: str
