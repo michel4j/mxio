@@ -68,11 +68,21 @@ class NXSDataSet(HDF5DataSet):
             self.glob = self.reference.replace('master', '??????')
 
         self.file = h5py.File(self.directory.joinpath(self.reference), 'r')
-        frame_count = self.extract_field(self.omega_field, array=True).size
+
         self.data_sections = [
             section for section in self.file['/entry/data'].keys() if re.match(r'data_\d{4,}', section)
         ]
+
+        # count frames from actual data arrays
+        frame_count = 0
+        for section in self.data_sections:
+            attrs = self.file[f'/entry/data/{section}'].attrs
+            frame_count += attrs['image_nr_high'] - attrs['image_nr_low'] + 1
+
+        self.format = 'NXmx'
+        self.series = numpy.arange(frame_count) + 1
+        self.size = frame_count
         self.max_section_size = int(numpy.ceil(frame_count / len(self.data_sections)))
         self.series = numpy.arange(frame_count) + 1
-        self.format = 'NXmx'
+
         self.get_frame(self.index)

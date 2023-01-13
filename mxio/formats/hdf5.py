@@ -7,7 +7,7 @@ from typing import Tuple, Union, Sequence, Any, BinaryIO
 import h5py
 import hdf5plugin
 import numpy
-from numpy.typing import NDArray
+from numpy.typing import NDArray, ArrayLike
 
 from mxio import DataSet, XYPair
 
@@ -100,7 +100,7 @@ class HDF5DataSet(DataSet):
         'delta': '/entry/sample/goniometer/{}_range_average'
     }
     format: str = 'HDF5'
-
+    start_angles: ArrayLike
 
     @classmethod
     def identify(cls, file: BinaryIO, extension: str) -> Tuple[str, ...]:
@@ -124,10 +124,17 @@ class HDF5DataSet(DataSet):
 
         self.file = h5py.File(self.directory.joinpath(self.reference), 'r')
         self.format = 'HDF5'
-        frame_count = self.extract_field(self.omega_field, array=True).size
+
+        self.data_sections = list(self.file['/entry/data'].keys())
+
+        # count frames from actual data arrays
+        frame_count = 0
+        for section in self.data_sections:
+            attrs = self.file[f'/entry/data/{section}'].attrs
+            frame_count += attrs['image_nr_high'] - attrs['image_nr_low'] + 1
+
         self.series = numpy.arange(frame_count) + 1
         self.size = frame_count
-        self.data_sections = list(self.file['/entry/data'].keys())
         self.max_section_size = int(numpy.ceil(frame_count / len(self.data_sections)))
         self.get_frame(self.index)
 
@@ -165,11 +172,13 @@ class HDF5DataSet(DataSet):
                 start_angles = self.extract_field(oscillation_fields['start'].format(axis), array=True)
                 value_varies = (start_angles.mean() != 0.0 and numpy.diff(start_angles).sum() != 0)
                 if len(start_angles) == 1 or value_varies:
+                    self.start_angles = start_angles
+
                     # found the right axis
                     for field, path in oscillation_fields.items():
                         header[f'{field}_angle'] = self.extract_field(path.format(axis), array=True)
 
-                    header['start_angle'] = float(header['start_angle'][0])
+                    header['start_angle'] = float(start_angles[0])
                     header['delta_angle'] = float(header['delta_angle'][0])
                     header['two_theta'] = 0.0
                     break
@@ -189,8 +198,10 @@ class HDF5DataSet(DataSet):
 
         header = self.parse_header(self.header_fields, self.oscillation_fields)
         header['format'] = self.format
+        header['start_angle'] = self.start_angles[index-1]
 
-        section_index, frame_index = divmod(index, self.max_section_size)
+        section_index, frame_index = divmod(index-1, self.max_section_size)
+
         assert section_index < len(self.data_sections), f"Section {section_index} does not exist"
         section_name = self.data_sections[section_index]
 

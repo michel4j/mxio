@@ -21,15 +21,15 @@ class DatasetTestCases(unittest.TestCase):
                 'mar345': data_dir / "mar345" / "example.mar2300",
             }
         else:
-            data_dir = Path("/archive/staff/michel/example_data_sets")
+            data_dir = Path("/home/michel/Work/Test-Data")
             self.test_data = {
-                'marccd': data_dir / "SSRL/BL11-1/myoglobin1/MyoBL11-1_1_075.mccd",
-                'smv': data_dir / "ALS/501/1vmd/9439_1_001.img",
-                'cbf': data_dir / "SLS/X06SA/lyso/lysozym-1_1_00001.cbf",
-                'raxis': data_dir / "RAXIS/HTC/lyso1/test1_lysozyme_0111060001.osc",
-                'hdf5': data_dir / "MAXIV/BioMAX/thaum/tau1-tau_2_master.h5",
-                'nexus': data_dir / "DLS/xtal_1_5.nxs",
-                'mar345': data_dir / "DESY/BW7B/3c8p/VTA_01_015.mar2300",
+                'marccd': data_dir / "marccd" / "insulin_001.img",
+                'smv': data_dir / "smv" / "ALS831_lyso_Gd_010.img",
+                'cbf': data_dir / "cbf" / "thaumatin_0001.cbf",
+                'raxis': data_dir / "raxis" / "lysozyme_0111060100.osc",
+                'hdf5': data_dir / "hdf5"/ "thau_8_master.h5",
+                'nexus': data_dir / "nexus" / "xtal_1_5.nxs",
+                'mar345': data_dir / "mar345" / "VTA_01_003.mar2300",
             }
 
     def test_marccd_format(self):
