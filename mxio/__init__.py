@@ -162,12 +162,15 @@ class DataSet(ABC):
 
         params = find_sweep(self.directory / self.reference)
         pattern = params['pattern']
-        frames = numpy.array([
-            int(frame_match.group(1)) for file_path in self.directory.iterdir()
-            for frame_match in [pattern.match(file_path.name)]
-            if file_path.is_file() and frame_match
-        ], dtype=int)
-        frames.sort()
+        if pattern:
+            frames = numpy.array([
+                int(frame_match.group(1)) for file_path in self.directory.iterdir()
+                for frame_match in [pattern.match(file_path.name)]
+                if file_path.is_file() and frame_match
+            ], dtype=int)
+            frames.sort()
+        else:
+            frames = numpy.array([])
 
         self.name = params['name']
         self.glob = params['glob']
@@ -393,25 +396,27 @@ def find_sweep(path: Path, name=r'[\w_-]+?') -> dict:
         )
         glob = '{name}{separator}{wildcard}{extension}'.format(width=width, wildcard='?' * width, **params)
         name = params['name']
-        names = [
-            file_path.name for file_path in directory.iterdir()
-            if file_path.is_file() and frame_pattern.match(file_path.name)
-        ]
-        common_name = os.path.commonprefix(names)
-        if common_name == name:
+
+        # unusual frame names without field separator
+        if width > 6:
+            names = [
+                file_path.name for file_path in directory.iterdir()
+                if file_path.is_file() and frame_pattern.match(file_path.name)
+            ]
+            common_name = os.path.commonprefix(names)
+            return find_sweep(path, name=common_name)
+        else:
             return {
-                'name': common_name,
+                'name': name,
                 'index': index,
                 'template': template,
                 'glob': glob,
                 'pattern': frame_pattern
             }
-        else:
-            return find_sweep(path, name=common_name)
     return {
         'name': file_name,
         'index': 0,
         'template': file_name,
         'glob': file_name,
-        'pattern': pattern
+        'pattern': ''
     }

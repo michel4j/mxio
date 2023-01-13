@@ -43,8 +43,8 @@ class SMVDataSet(DataSet):
             }
 
             data_type_str = DATA_TYPES[info.get('type', "unsigned_short")]
-            endian_suffix = '>' if info.get("byte_order") == 'big_endian' else '<'
-            data_type = numpy.dtype(f'{endian_suffix}{data_type_str}')
+            endian = '>' if info.get("byte_order") == 'big_endian' else '<'
+            data_type = numpy.dtype(f'{data_type_str}')
             pixel_size = float(info['pixel_size'])
             x_center = float(info['beam_center_x']) / pixel_size
             y_center = float(info['beam_center_y']) / pixel_size
@@ -86,7 +86,6 @@ class SMVDataSet(DataSet):
             raw_data = file.read(data_size)
 
         data = numpy.frombuffer(raw_data, dtype=data_type).reshape(header['size'].y, header['size'].x)
-        if data_type.byteorder == '>':
+        if endian == '>':
             data = data.byteswap()
-
         return header, data

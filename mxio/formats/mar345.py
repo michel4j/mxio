@@ -1,10 +1,11 @@
 import os
 import numpy
 import struct
+
 from pathlib import Path
 from typing import Tuple, Union, BinaryIO
 from numpy.typing import NDArray
-
+from pycbf.img import Img
 from mxio import DataSet, XYPair, parser
 
 __all__ = [
@@ -55,7 +56,6 @@ HEADER_LEXICON = {
     ]
 }
 
-
 class MAR345DataSet(DataSet):
 
     @classmethod
@@ -67,6 +67,7 @@ class MAR345DataSet(DataSet):
             return "MAR345 Area Detector Image", "Little-Endian"
 
     def read_file(self, filename: Union[str, Path]) -> Tuple[dict, NDArray]:
+
         # Read MAR345 header
         with open(Path(filename), 'rb') as file:
             endian = '>' if "Big-Endian" in self.tags else '<'
@@ -80,7 +81,6 @@ class MAR345DataSet(DataSet):
             while line.strip() != 'END OF HEADER':
                 try:
                     line = file.readline()
-                    print(line)
                     line = line.decode('utf-8').strip()
                 except UnicodeDecodeError:
                     line = ''
@@ -109,7 +109,7 @@ class MAR345DataSet(DataSet):
                 'start_angle': start_angle,
                 'delta_angle': delta_angle,
                 'detector': keywords.get('detector', 'MAR345').upper(),
-                'cutoff_value': 65535,
+                'cutoff_value': 65535*2,
                 'overloads': info['overloads'][0],
                 'average': keywords['average'],
                 'maximum': keywords['maximum'],
@@ -117,109 +117,12 @@ class MAR345DataSet(DataSet):
                 'minimum': keywords['minimum'],
             }
 
-            high_bytes = int(info['overloads'][0]/8 + 0.875) * 64
-            file.seek(4096 + high_bytes)
-            raw_data = file.read()
+            file.seek(4096)
 
-            data_type = numpy.dtype(f'{endian}u2')
+            # read image data
+            img = Img()
+            swap = 1 if endian == '>' else 0
+            img.read_mar345data(file, (header['size'].x, header['size'].y, info['overloads'][0], swap))
+            data = img.image
 
-        data = unpack_bits(raw_data, header['size'].x, header['size'].y)
-
-        return header, data.view(data_type)
-
-
-def unpack_bits(raw_data: bytes, x: int, y: int) -> NDArray:
-    """
-    Unpack a series of bytes using the RLE algorithm
-    :param raw_data: #byte string to be decompressed
-    :param x: x-size
-    :param y: y-size
-    :return: decompressed array
-    """
-    setbits = numpy.array([
-        0x00000000, 0x00000001, 0x00000003, 0x00000007,
-		0x0000000F, 0x0000001F, 0x0000003F, 0x0000007F,
-		0x000000FF, 0x000001FF, 0x000003FF, 0x000007FF,
-		0x00000FFF, 0x00001FFF, 0x00003FFF, 0x00007FFF,
-		0x0000FFFF, 0x0001FFFF, 0x0003FFFF, 0x0007FFFF,
-		0x000FFFFF, 0x001FFFFF, 0x003FFFFF, 0x007FFFFF,
-		0x00FFFFFF, 0x01FFFFFF, 0x03FFFFFF, 0x07FFFFFF,
-		0x0FFFFFFF, 0x1FFFFFFF, 0x3FFFFFFF, 0x7FFFFFFF,
-        0xFFFFFFFF
-    ], dtype=numpy.int32)
-
-    def shift_left(v, n): return (v & setbits[32 - n]) << n
-    def shift_right(v, n): return (v >> n) & setbits[32 - n]
-
-    pos = 0
-    pixel = 0
-    window = 0
-    spill = 0
-    bitdecode = [0, 4, 5, 6, 7, 8, 16, 32]
-
-    valids = numpy.int32(0)
-    spillbits = numpy.int32(0)
-    total = x * y
-
-    byte_array = numpy.frombuffer(raw_data, dtype=numpy.ubyte)
-    data = numpy.zeros((total, ), dtype=numpy.uint16)
-
-    try:
-        while pixel < total:
-            if valids < 6:
-                if spillbits > 0:
-                    window |= shift_left(spill, valids)
-                    valids += spillbits
-                    spillbits = 0
-                else:
-                    spill = numpy.int32(byte_array[pos]); pos += 1
-                    spillbits = 8
-            else:
-                pixnum = 1 << (window & setbits[3])
-                window = shift_right(window, 3)
-                bitnum = bitdecode[window & setbits[3]]
-                window = shift_right(window, 3)
-                valids -= 6
-                while pixnum > 0 and pixel < total:
-                    if valids < bitnum:
-                        if spillbits > 0:
-                            window |= shift_left(spill, valids)
-                            if 32 - valids > spillbits:
-                                valids += spillbits
-                                spillbits = 0
-                            else:
-                                usedbits = 32 - valids
-                                spill = shift_right(spill, usedbits)
-                                spillbits -= usedbits
-                                valids = 32
-                        else:
-                            spill = numpy.int32(byte_array[pos]); pos += 1
-                            spillbits = 8
-                    else:
-                        pixnum -= 1
-                        if bitnum == 0:
-                            nextint = 0
-                        else:
-                            nextint = window & setbits[bitnum]
-                            valids -= bitnum
-                            window = shift_right(window, bitnum)
-                            if (nextint & (1 << (bitnum - 1))) != 0:
-                                nextint |= ~setbits[bitnum]
-                        if pixel > x:
-                            data[pixel] = (
-                                nextint +
-                                (data[pixel - 1] + data[pixel - x + 1] +  data[pixel - x] + data[pixel -x-1] + 2)/4
-                            )
-                            pixel += 1
-                        elif pixel != 0:
-                            data[pixel] = nextint + data[pixel - 1]
-                            pixel += 1
-                        else:
-                            data[pixel] =  nextint
-                            pixel += 1
-    except Exception as e:
-        print(pos, e)
-
-
-    return data.reshape((y, x))
-
+        return header, data

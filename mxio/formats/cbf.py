@@ -84,7 +84,7 @@ DATA_TYPES = {
 HEADER_SPECS = {
     "SLS_1.0": {
         "fields": [
-            "# Detector: <str:detector>, SN <slug:serial_number>, <str:beamline>",
+            "# Detector: <str:detector> SN: <slug:serial_number>",
             "# Pixel_size <float:pixel_size> m x <float:pixel_size> m",
             "# Exposure_period <float:exposure> s",
             "# Count_cutoff <int:cutoff_value> counts",
@@ -355,10 +355,10 @@ class CBFDataSet(DataSet):
 
         detector_name = ct.c_char_p()
         result |= cbflib.cbf_get_detector_id(handle, 0, ct.byref(detector_name))
-        header['detector'] = detector_name.value if detector_name.value else "UNKNOWN"
+        header['detector'] = detector_name.value.decode('utf-8') if detector_name.value else "UNKNOWN"
 
-        # handle XDS Special cbf files
-        if header['distance'] == 999.0 and header['delta_angle'] == 0.0 and header['exposure'] == 0.0:
+        # handle mini-cbf files
+        if header['delta_angle'] == 0.0 and header['exposure'] == 0.0:
             mini_cbf_type = ct.c_char_p()
             mini_cbf_header = ct.c_char_p()
 
@@ -374,7 +374,6 @@ class CBFDataSet(DataSet):
                 info = parser.parse_text(specs, mini_cbf_header.value.decode('utf-8'))
                 pixel_size = list(map(lambda v: v * 1000, info['pixel_size']))
                 header['detector'] = info['detector'].strip()
-                header['two_theta'] = 0 if not info['two_theta'] else round(info['two_theta'], 2)
                 header['pixel_size'] = XYPair(*pixel_size)
                 header['exposure'] = info['exposure']
                 header['wavelength'] = info['wavelength']
@@ -384,6 +383,8 @@ class CBFDataSet(DataSet):
                 header['delta_angle'] = info['delta_angle']
                 header['cutoff_value'] = info['cutoff_value']
                 header['sensor_thickness'] = info['sensor_thickness'] * 1000
+                if 'two_theta' in info:
+                    header['two_theta'] = round(info['two_theta'], 2)
 
         data_type = DATA_TYPES[mime_header.get('X-Binary-Element-Type', 'signed 32-bit integer')]
         element_size = data_type.itemsize

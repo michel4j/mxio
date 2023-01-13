@@ -92,7 +92,7 @@ class RAXISDataSet(DataSet):
                 key: struct.unpack(f"{endian}{format_str}", file.read(struct.calcsize(f"{endian}{format_str}")))
                 for key, format_str in HEADER_SPECS.items()
             }
-            data_type = numpy.dtype(f'{endian}u2')
+            data_type = numpy.dtype('u2')
 
             header = {
                 'format': 'RAXIS',
@@ -116,7 +116,7 @@ class RAXISDataSet(DataSet):
             raw_data = file.read(data_size)
 
         data = numpy.frombuffer(raw_data, dtype=data_type).reshape(header['size'].y, header['size'].x)
-        if data_type.byteorder == '>':
+        if endian == '>':
             data = data.byteswap()
 
         return header, data
