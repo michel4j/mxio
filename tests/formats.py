@@ -34,7 +34,7 @@ class DatasetTestCases(unittest.TestCase):
 
     def test_marccd_format(self):
         from mxio.formats import cbf
-        dset = DataSet.new_from_file(self.test_data['cbf'])
+        dset = DataSet.new_from_file(self.test_data['marccd'])
         cbf.CBFDataSet.save_frame('/tmp/marccd_0001.cbf', dset.frame)
 
     def test_smv_format(self):
