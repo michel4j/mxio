@@ -26,6 +26,14 @@ NUMBER_FORMATS = {
     'int64': numpy.dtype(numpy.int32),
 }
 
+# NUMBER_FORMATS = {
+#     'uint16': numpy.dtype(numpy.int32),
+#     'uint32': numpy.dtype(numpy.int32),
+#     'uint64': numpy.dtype(numpy.int64),
+#     'int32': numpy.dtype(numpy.int32),
+#     'int64': numpy.dtype(numpy.int32),
+# }
+
 def save_array(name, data):
     """
     Save an array to hdf5 using BitShuffle
@@ -211,7 +219,8 @@ class HDF5DataSet(DataSet):
         path = self.directory.joinpath(section_file)
 
         assert path.exists(), f"External data link file {section_file} could not be found"
-        data = self.extract_field(key, array=True, index=frame_index)
+        raw_data = self.extract_field(key, array=True, index=frame_index)
+        data = raw_data.view(NUMBER_FORMATS[str(raw_data.dtype)])
 
-        return header, data.view(NUMBER_FORMATS[str(data.dtype)])
+        return header, data
 

@@ -162,11 +162,12 @@ def multiplexer(address, port):
 
     context = zmq.Context()
     backend = context.socket(zmq.PULL)
-    backend.connect(address)
     frontend = context.socket(zmq.PUB)
-    frontend.bind(f"tcp://*:{port}")
 
     try:
+        backend.connect(address)
+        frontend.bind(f"tcp://*:{port}")
+
         print(f'Starting ZMQ PULL Multiplexer proxying messages from {address} to {port} ...')
         zmq.device(zmq.STREAMER, frontend, backend)
     finally:

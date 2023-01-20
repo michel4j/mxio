@@ -302,7 +302,7 @@ class DataSet(ABC):
                 "average": average,
                 "minimum": minimum,
                 "sigma": sigma,
-                "overloads": (data >= header['cutoff_value']).sum()
+                "overloads": 4*(data >= header['cutoff_value']).sum()
             })
 
         frame = ImageFrame(**header, data=data)

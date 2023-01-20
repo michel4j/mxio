@@ -1,5 +1,6 @@
 import ctypes as ct
 import os
+import sys
 import re
 from pathlib import Path
 from typing import Tuple, Union, BinaryIO
@@ -79,6 +80,12 @@ DATA_TYPES = {
     "signed 16-bit integer": numpy.dtype('i2'),
     "signed 32-bit integer": numpy.dtype('i4'),
     "unsigned 64-bit integer": numpy.dtype("i8")
+}
+
+BYTE_ORDERING = {
+    '>': 'big',
+    '<': 'little',
+    '=': sys.byteorder,
 }
 
 HEADER_SPECS = {
@@ -240,9 +247,9 @@ class CBFDataSet(DataSet):
             1,  # binary id
             ct.byref(data),
             ct.c_size_t(frame.data.itemsize),
-            0,  # signed
+            int(frame.data.dtype.kind == 'i'),  # signed
             frame.size.x * frame.size.y,
-            b"little_endian",
+            "{}_endian".format(BYTE_ORDERING.get(frame.data.dtype.byteorder, 'little')).encode("utf-8"),
             ct.c_size_t(frame.size.x),
             ct.c_size_t(frame.size.y),
             0,
