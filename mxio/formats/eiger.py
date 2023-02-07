@@ -133,7 +133,7 @@ class EigerStream(DataSet):
             'distance': self.global_header['distance'],
             'center': XYPair(*self.global_header['center']),
             'start_angle': self.global_header['start_angle'] + index * self.global_header['delta_angle'],
-            'delta_angle': 0.0,
+            'delta_angle': self.global_header['delta_angle'],
             'sensor_thickness': self.global_header['sensor_thickness'],
         }
 

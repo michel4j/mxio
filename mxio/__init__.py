@@ -339,7 +339,7 @@ class DataSet(ABC):
     @abstractmethod
     def read_file(self, filename: Union[str, Path]) -> Tuple[HeaderAttrs, NDArray]:
         """
-        Read
+        Read the file and return a header dictionary and a 2D array representing the image
         :param filename: file to read
         :return: Tuple[dict, NDArray]
         """
