@@ -9,7 +9,7 @@ import numpy
 from numpy.typing import ArrayLike
 
 from mxio import parser
-from mxio import DataSet, ImageFrame, XYPair
+from mxio import DataSet, ImageFrame, XYPair, Geometry
 
 __all__ = [
     "CBFDataSet"
@@ -173,6 +173,14 @@ cbflib.cbf_get_image_size.argtypes = [
 cbflib.cbf_get_detector_normal.argtypes = [
     ct.c_void_p, ct.POINTER(ct.c_double), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double)
 ]
+
+cbflib.cbf_get_detector_axis_slow.argtypes = [
+    ct.c_void_p,  ct.POINTER(ct.c_double), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double),
+]
+cbflib.cbf_get_detector_axis_fast.argtypes =[
+    ct.c_void_p,  ct.POINTER(ct.c_double), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double),
+]
+
 cbflib.cbf_get_rotation_axis.argtypes = [
     ct.c_void_p, ct.c_uint, ct.POINTER(ct.c_double), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double)
 ]
@@ -348,16 +356,26 @@ class CBFDataSet(DataSet):
         result |= cbflib.cbf_get_overload(handle, 0, ct.byref(ovl))
         header['cutoff_value'] = ovl.value
 
-        # gon_x, gon_y, gon_z = ct.c_double(1.0), ct.c_double(0.0), ct.c_double(0.0)
-        # result |= cbflib.cbf_get_rotation_axis(goniometer, 0, ct.byref(gon_x), ct.byref(gon_y), ct.byref(gon_x))
-        # rot_axis = numpy.array([gon_x.value, gon_y.value, gon_z.value])
+        gonio_x, gonio_y, gonio_z = ct.c_double(1.0), ct.c_double(0.0), ct.c_double(0.0)
+        xaxis_x, xaxis_y, xaxis_z = ct.c_double(1.0), ct.c_double(0.0), ct.c_double(0.0)
+        yaxis_x, yaxis_y, yaxis_z = ct.c_double(0.0), ct.c_double(1.0), ct.c_double(0.0)
+        result |= cbflib.cbf_get_detector_axis_fast(detector, ct.byref(xaxis_x), ct.byref(xaxis_y), ct.byref(xaxis_z))
+        result |= cbflib.cbf_get_detector_axis_slow(detector, ct.byref(yaxis_x), ct.byref(yaxis_y), ct.byref(yaxis_z))
+        result |= cbflib.cbf_get_rotation_axis(goniometer, 0, ct.byref(gonio_x), ct.byref(gonio_y), ct.byref(gonio_x))
 
-        det_x, det_y, det_z = ct.c_double(0.0), ct.c_double(0.0), ct.c_double(1.0)
-        result |= cbflib.cbf_get_detector_normal(detector, ct.byref(det_x), ct.byref(det_y), ct.byref(det_z))
-        detector_norm = numpy.array([det_x.value, det_y.value, det_z.value])
+        geometry = Geometry(
+            detector=(
+                (xaxis_x.value, xaxis_y.value, xaxis_z.value),
+                (yaxis_x.value, yaxis_y.value, yaxis_z.value)
+            ),
+            goniometer=(gonio_x.value, gonio_y.value, gonio_z.value),
+            beam=(0.0, 0.0, 1.0),
+        )
 
-        beam_axis = numpy.array([0, 0, 1])
-        two_theta_radians = numpy.arccos(numpy.dot(detector_norm, beam_axis))
+        detector_norm = numpy.cross(geometry.detector[0], geometry.detector[1])
+        two_theta_radians = numpy.arccos(numpy.dot(detector_norm, geometry.beam))
+
+        header['geometry'] = geometry
         header['two_theta'] = numpy.degrees(two_theta_radians)
 
         detector_name = ct.c_char_p()
@@ -390,6 +408,7 @@ class CBFDataSet(DataSet):
                 header['delta_angle'] = info['delta_angle']
                 header['cutoff_value'] = info['cutoff_value']
                 header['sensor_thickness'] = info['sensor_thickness'] * 1000
+
                 if 'two_theta' in info:
                     header['two_theta'] = round(info['two_theta'], 2)
 

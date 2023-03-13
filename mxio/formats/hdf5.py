@@ -9,7 +9,7 @@ import hdf5plugin
 import numpy
 from numpy.typing import NDArray, ArrayLike
 
-from mxio import DataSet, XYPair
+from mxio import DataSet, XYPair, Geometry
 
 __all__ = [
     "HDF5DataSet",
@@ -25,14 +25,6 @@ NUMBER_FORMATS = {
     'int32': numpy.dtype(numpy.int32),
     'int64': numpy.dtype(numpy.int32),
 }
-
-# NUMBER_FORMATS = {
-#     'uint16': numpy.dtype(numpy.int32),
-#     'uint32': numpy.dtype(numpy.int32),
-#     'uint64': numpy.dtype(numpy.int64),
-#     'int32': numpy.dtype(numpy.int32),
-#     'int64': numpy.dtype(numpy.int32),
-# }
 
 def save_array(name, data):
     """
@@ -80,7 +72,7 @@ class HDF5DataSet(DataSet):
     max_section_size: int
     format: str
     omega_field: str = '/entry/sample/goniometer/omega'
-    array_fields: tuple = ('two_theta', 'omega', 'chi', 'phi', 'kappa')
+    array_fields: tuple = ('two_theta', 'omega', 'chi', 'phi', 'kappa', 'geometry')
     header_fields: dict = {
         'detector': '/entry/instrument/detector/description',
         'serial_number': '/entry/instrument/detector/detector_number',
@@ -102,6 +94,9 @@ class HDF5DataSet(DataSet):
             '/entry/instrument/detector/detectorSpecific/x_pixels_in_detector',
             '/entry/instrument/detector/detectorSpecific/y_pixels_in_detector'
         ),
+        # 'geometry': (
+        #     '/entry/instrument/detector/geometry/orientation/value',
+        # )
     }
     oscillation_fields: dict = {
         'start': '/entry/sample/goniometer/{}',
@@ -196,6 +191,12 @@ class HDF5DataSet(DataSet):
         header['size'] = XYPair(*header["size"])
         header['pixel_size'] = XYPair(*header['pixel_size'])
         header['center'] = XYPair(*header["center"])
+
+        # detector_orientation = header['geometry'][0]
+        # header['geometry'] = Geometry(
+        #     detector=(tuple(detector_orientation[:3]), tuple(detector_orientation[3:])),
+        #     goniometer=(-1, 0, 0), beam=(0, 0, 1)
+        # )
 
         return header
 

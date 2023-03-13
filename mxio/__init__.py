@@ -35,6 +35,7 @@ __all__ = [
     'ImageFrame',
     'DataSetAttrs',
     'DataSet',
+    'Geometry',
 ]
 
 class UnknownDataFormat(Exception):
@@ -45,6 +46,14 @@ class UnknownDataFormat(Exception):
 class XYPair:
     x: Union[int, float]
     y: Union[int, float]
+
+
+@dataclass
+class Geometry:
+    detector: Tuple[Tuple[float, float, float], Tuple[float, float, float]] = ((1., 0., 0.), (0., 1., 0.))
+    goniometer: Tuple[float, float, float] = (1., 0., 0.)
+    beam: Tuple[float, float, float] = (0., 0., 1.)
+    polarization: Tuple[float, float, float] = (0., 1., 0.)
 
 
 class HeaderAttrs(TypedDict):
@@ -62,6 +71,7 @@ class HeaderAttrs(TypedDict):
     start_angle: float
     delta_angle: float
     cutoff_value: float
+    geometry: Geometry
     maximum: float
     minimum: float
     sigma: float
@@ -85,6 +95,7 @@ class ImageFrame:
     start_angle: float
     delta_angle: float
     cutoff_value: float = field(repr=False)
+    geometry: Geometry = field(repr=False)
     serial_number: str = field(repr=False, default='00-000')
     maximum: Optional[float] = field(repr=False, default=0.0)
     minimum: Optional[float] = field(repr=False, default=0.0)
@@ -113,6 +124,7 @@ class DataSet(ABC):
     reference: str
     glob: str
     index: int
+    geometry: Geometry
     size: int
     tags: Tuple[str, ...]
     frame: Union[ImageFrame, None]
@@ -284,6 +296,17 @@ class DataSet(ABC):
         :param index: int Frame index, defaults ot 1 if not provided
         """
 
+        if 'geometry' not in header:
+            two_theta_radians = numpy.radians(header['two_theta'])
+            header['geometry'] = Geometry(
+                detector=(
+                    (1.0, 0.0, 0.0),
+                    (0.0, numpy.cos(two_theta_radians), -1 * numpy.sin(two_theta_radians)),
+                ),
+                beam=(0.0, 0.0, 1.0),
+                goniometer=(1.0, 0.0, 0.0)
+            )
+
         # calculate statistics if missing in header
         if any(key not in header for key in ("average", "minimum", "maximum", "overloads", "sigma")):
             w, h = numpy.array(data.shape) // 2
@@ -306,6 +329,7 @@ class DataSet(ABC):
             })
 
         frame = ImageFrame(**header, data=data)
+        self.geometry = frame.geometry
         self.frame = frame
         self.index = index
 

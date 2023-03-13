@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Tuple, Union, BinaryIO
 from numpy.typing import NDArray
 
-from mxio import DataSet, XYPair
+from mxio import DataSet, XYPair, Geometry
 
 __all__ = [
     "RAXISDataSet"
@@ -93,7 +93,6 @@ class RAXISDataSet(DataSet):
                 for key, format_str in HEADER_SPECS.items()
             }
             data_type = numpy.dtype('u2')
-
             header = {
                 'format': 'RAXIS',
                 'filename': os.path.basename(filename),
@@ -110,6 +109,14 @@ class RAXISDataSet(DataSet):
                 'cutoff_value': int(2 ** (8 * data_type.itemsize) - 1)
             }
 
+            gonio_axis = tuple(numpy.reshape(info['gonio_axes'], (-1, 3))[info['scan_axis']])
+            header['geometry'] = Geometry(
+                detector=(
+                    (0.0, -1.0, 0.0),
+                    (numpy.cos(numpy.radians(header['two_theta'])), 0.0, numpy.sin(numpy.radians(header['two_theta']))),
+                ),
+                goniometer=gonio_axis, beam=(0.0, 0.0, 1.0),  polarization=(1.0, 0.0, 0.0)
+            )
             num_elements = header['size'].x * header['size'].y
             data_size = num_elements * data_type.itemsize
             file.seek(-data_size, 2)

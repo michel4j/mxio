@@ -34,6 +34,9 @@ class NXSDataSet(HDF5DataSet):
             '/entry/instrument/detector/detectorSpecific/x_pixels_in_detector',
             '/entry/instrument/detector/detectorSpecific/y_pixels_in_detector'
         ),
+        # 'geometry': (
+        #     '/entry/instrument/detector/geometry/orientation/value',
+        # )
     }
     omega_field = '/entry/sample/transformations/omega'
 
