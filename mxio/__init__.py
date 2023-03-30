@@ -142,6 +142,7 @@ class DataSet(ABC):
         self.index = 0
         self.size = 0
         self.tags = tags
+        self.frame = None
 
         if file_path is not None:
             file_path = Path(file_path).absolute()
@@ -257,12 +258,20 @@ class DataSet(ABC):
         :param index: Frame number
         :return: ImageFrame or None if no frame of the given number exists
         """
-
-        if index in self.series:
+        if index == self.index and self.frame is not None:
+            return self.frame
+        elif index in self.series:
             file_name = self.directory.joinpath(self.template.format(field=index))
             header, data = self.read_file(file_name)
             self.set_frame(header, data, index)
             return self.frame
+
+    def frames(self) -> ImageFrame:
+        """
+        A generator which yields frames from the dataset, updates the index parameter of the dataset each iteration
+        """
+        for index in self.series:
+            yield self.get_frame(index=index)
 
     def next_frame(self) -> Union[ImageFrame, None]:
         """
