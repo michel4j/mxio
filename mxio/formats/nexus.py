@@ -1,10 +1,9 @@
 import re
-from pathlib import Path
-from typing import BinaryIO, Tuple, Union
+
+from typing import BinaryIO, Tuple
 
 import h5py
 import numpy
-from numpy.typing import NDArray
 
 from .hdf5 import HDF5DataSet, hdf5_file_parts, NUMBER_FORMATS
 
@@ -72,20 +71,20 @@ class NXSDataSet(HDF5DataSet):
 
         self.file = h5py.File(self.directory.joinpath(self.reference), 'r')
 
-        self.data_sections = [
-            section for section in self.file['/entry/data'].keys() if re.match(r'data_\d{4,}', section)
-        ]
-
         # count frames from actual data arrays
         frame_count = 0
-        for section in self.data_sections:
+        section_keys = [
+            section for section in self.file['/entry/data'].keys() if re.match(r'data_\d{4,}', section)
+        ]
+        self.data_sections = {}
+        for section in section_keys:
             attrs = self.file[f'/entry/data/{section}'].attrs
-            frame_count += attrs['image_nr_high'] - attrs['image_nr_low'] + 1
+            self.data_sections[section] = range(attrs['image_nr_low'], attrs['image_nr_high']+1)
+            frame_count += len(self.data_sections[section])
 
         self.format = 'NXmx'
         self.series = numpy.arange(frame_count) + 1
         self.size = frame_count
-        self.max_section_size = int(numpy.ceil(frame_count / len(self.data_sections)))
         self.series = numpy.arange(frame_count) + 1
 
         self.get_frame(self.index)

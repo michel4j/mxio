@@ -1,8 +1,9 @@
+from __future__ import annotations
 
 import re
 
 from pathlib import Path
-from typing import Tuple, Union, Sequence, Any, BinaryIO
+from typing import Tuple, Union, Dict, Any, BinaryIO
 
 import h5py
 import hdf5plugin
@@ -68,8 +69,7 @@ def hdf5_file_parts(image_path: Union[Path, str]) -> Tuple[int, str, Path]:
 class HDF5DataSet(DataSet):
 
     file: h5py.File
-    data_sections: Sequence[str]
-    max_section_size: int
+    data_sections: Dict[str, range]
     format: str
     omega_field: str = '/entry/sample/goniometer/omega'
     array_fields: tuple = ('two_theta', 'omega', 'chi', 'phi', 'kappa', 'geometry')
@@ -128,26 +128,27 @@ class HDF5DataSet(DataSet):
         self.file = h5py.File(self.directory.joinpath(self.reference), 'r')
         self.format = 'HDF5'
 
-        self.data_sections = list(self.file['/entry/data'].keys())
-
         # count frames from actual data arrays
         frame_count = 0
-        for section in self.data_sections:
+        section_keys = list(self.file['/entry/data'].keys())
+        self.data_sections = {}
+        for section in section_keys:
             attrs = self.file[f'/entry/data/{section}'].attrs
-            frame_count += attrs['image_nr_high'] - attrs['image_nr_low'] + 1
+            self.data_sections[section] = range(attrs['image_nr_low'], attrs['image_nr_high']+1)
+            frame_count += len(self.data_sections[section])
 
         self.series = numpy.arange(frame_count) + 1
         self.size = frame_count
-        self.max_section_size = int(numpy.ceil(frame_count / len(self.data_sections)))
         self.get_frame(self.index)
 
-    def extract_field(self, field: str, array: bool = False, index: slice = ()) -> Any:
+    def extract_field(self, field: str, array: bool = False, index: slice | int = ()) -> Any:
         """
         Extract an HDF5 field from the archive
         :param field: field path
         :param array: bool
         :param index: slice to extract a subset of a larger array
         """
+
         field_value = self.file[field]
         raw_value = field_value[index]
         if field_value.shape == () and array:
@@ -205,14 +206,18 @@ class HDF5DataSet(DataSet):
         assert (reference, directory) == (self.reference, self.directory), "Invalid data archive"
         assert index in self.series, f"Frame {index} does not exist in this archive"
 
+        section_name, frame_index = "", -1
+        for name, frame_range in self.data_sections.items():
+            if index in frame_range:
+                section_name = name
+                frame_index = frame_range.index(index)
+                break
+
         header = self.parse_header(self.header_fields, self.oscillation_fields)
         header['format'] = self.format
         header['start_angle'] = self.start_angles[index-1]
 
-        section_index, frame_index = divmod(index-1, self.max_section_size)
-
-        assert section_index < len(self.data_sections), f"Section {section_index} does not exist"
-        section_name = self.data_sections[section_index]
+        assert section_name in self.data_sections, f"Section not found"
 
         key = f'/entry/data/{section_name}'
         link = self.file.get(key, getlink=True)
