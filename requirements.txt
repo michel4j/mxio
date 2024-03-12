@@ -3,7 +3,7 @@ h5py
 opencv-python
 python-magic
 pytz
-pycbf
+pycbf==0.9.6.5
 pyyaml
 numpy
 iso8601

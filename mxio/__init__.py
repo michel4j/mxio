@@ -179,7 +179,7 @@ class DataSet(ABC):
             frames = numpy.array([
                 int(frame_match.group(1)) for file_path in self.directory.iterdir()
                 for frame_match in [pattern.match(file_path.name)]
-                if file_path.is_file() and frame_match
+                if frame_match
             ], dtype=int)
             frames.sort()
         else:
@@ -434,7 +434,7 @@ def find_sweep(path: Path, name=r'[\w_-]+?') -> dict:
         if width > 6:
             names = [
                 file_path.name for file_path in directory.iterdir()
-                if file_path.is_file() and frame_pattern.match(file_path.name)
+                if frame_pattern.match(file_path.name)
             ]
             common_name = os.path.commonprefix(names)
             return find_sweep(path, name=common_name)

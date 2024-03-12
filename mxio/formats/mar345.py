@@ -5,7 +5,7 @@ import struct
 from pathlib import Path
 from typing import Tuple, Union, BinaryIO
 from numpy.typing import NDArray
-from pycbf.img import Img
+
 from mxio import DataSet, XYPair, parser
 
 __all__ = [
@@ -56,17 +56,28 @@ HEADER_LEXICON = {
     ]
 }
 
+
 class MAR345DataSet(DataSet):
 
     @classmethod
     def identify(cls, file: BinaryIO, extension: str) -> Tuple[str, ...]:
-        magic = file.read(2)
-        if magic == b'\x04\xd2':
-            return "MAR345 Area Detector Image", "Big-Endian"
-        elif magic == b'\xd2\x04':
-            return "MAR345 Area Detector Image", "Little-Endian"
+
+        try:
+            from pycbf.img import Img
+        except ImportError:
+            pass
+        else:
+            magic = file.read(2)
+            if magic == b'\x04\xd2':
+                return "MAR345 Area Detector Image", "Big-Endian"
+            elif magic == b'\xd2\x04':
+                return "MAR345 Area Detector Image", "Little-Endian"
 
     def read_file(self, filename: Union[str, Path]) -> Tuple[dict, NDArray]:
+        try:
+            from pycbf.img import Img
+        except ImportError:
+            return {}, None
 
         # Read MAR345 header
         with open(Path(filename), 'rb') as file:
