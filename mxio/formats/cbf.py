@@ -106,7 +106,7 @@ HEADER_SPECS = {
     },
     "PILATUS_1.2": {
         'fields': [
-            '# Detector: <str:detector>, S/N <slug:serial_number>',
+            r'# Detector: <str:detector>, <slug:snl> <slug:serial_number>',
             '# Pixel_size <float:pixel_size> m x <float:pixel_size> m',
             '# Exposure_period <float:exposure> s',
             '# Count_cutoff <int:cutoff_value> counts',
@@ -116,7 +116,7 @@ HEADER_SPECS = {
             '# Start_angle <float:start_angle> deg',
             '# Angle_increment <float:delta_angle> deg.',
             '# Detector_2theta <float:two_theta> deg.',
-            '# Silicon sensor, thickness <float:sensor_thickness> m'
+            '# Silicon sensor, thickness <float:sensor_thickness>'
         ]
     }
 }

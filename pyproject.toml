@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=42", "setuptools_scm[toml]>=6.0.1", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mxio"
+description = "A Simple X-ray Area Detector Data IO Library"
+readme = "README.md"
+dynamic = ["version"]
+license = { text = "MIT" }
+authors = [
+    { name = "Michel Fodje", email = "michel4j@gmail.com" }
+]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "hdf5plugin",
+    "h5py",
+    "opencv-python",
+    "python-magic",
+    "pytz",
+    "pyyaml",
+    "numpy",
+    "iso8601",
+    "lz4",
+    "pyzmq",
+    "setuptools-scm"
+]
+
+[project.urls]
+homepage = "https://github.com/michel4j/mxio"
+
+[tool.setuptools_scm]
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"
+
+[project.entry-points."mxio.plugins"]
+CBF = "mxio.formats.cbf"
+HDF5 = "mxio.formats.hdf5"
+MARCCD = "mxio.formats.marccd"
+RAXIS = "mxio.formats.raxis"
+SMV = "mxio.formats.smv"
+NEXUS = "mxio.formats.nexus"
+MAR345 = "mxio.formats.mar345"
