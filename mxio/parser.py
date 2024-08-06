@@ -146,7 +146,6 @@ def build_pattern(pattern: str) -> Tuple[re.Pattern, List[dict]]:
 
         # Extract token fields
         data = {k: v for k, v in match.groupdict().items() if v is not None}
-        print(pattern, data)
         data['token'] = '<{}>'.format(token)
 
         if data['type'] not in Converter:
