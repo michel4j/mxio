@@ -21,6 +21,7 @@ classifiers = [
 ]
 dependencies = [
     "hdf5plugin",
+    "parsefire",
     "h5py",
     "opencv-python",
     "python-magic",

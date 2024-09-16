@@ -8,7 +8,7 @@ from typing import Tuple, Union, BinaryIO
 import numpy
 from numpy.typing import ArrayLike
 
-from mxio import parser
+from parsefire import parser
 from mxio import DataSet, ImageFrame, XYPair, Geometry
 
 __all__ = [

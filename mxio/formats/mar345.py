@@ -1,12 +1,12 @@
 import os
-import numpy
 import struct
 
 from pathlib import Path
 from typing import Tuple, Union, BinaryIO
 from numpy.typing import NDArray
 
-from mxio import DataSet, XYPair, parser
+from parsefire import parser
+from mxio import DataSet, XYPair
 
 __all__ = [
     "MAR345DataSet"

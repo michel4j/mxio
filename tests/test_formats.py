@@ -65,5 +65,6 @@ class DatasetTestCases(unittest.TestCase):
         dset = DataSet.new_from_file(self.test_data['mar345'])
         cbf.CBFDataSet.save_frame('/tmp/mar345_0001.cbf', dset.frame)
 
+
 if __name__ == '__main__':
     unittest.main()
