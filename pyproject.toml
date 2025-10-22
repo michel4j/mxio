@@ -23,10 +23,11 @@ dependencies = [
     "iso8601",
     "lz4",
     "pyzmq",
-    "setuptools-scm"
+    "setuptools-scm",
+    "poetry-dynamic-versioning (>=1.0.0)"
 ]
 requires-python = ">=3.9,<4.0"
-version = "0.0.0"
+
 
 [project.urls]
 Homepage = "https://github.com/michel4j/mxio"
@@ -46,6 +47,7 @@ MAR345 = "mxio.formats.mar345"
 packages = [
     { include = "mxio" },
 ]
+version = "0.0.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
