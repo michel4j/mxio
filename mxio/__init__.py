@@ -320,7 +320,7 @@ class DataSet(ABC):
         if any(key not in header for key in ("average", "minimum", "maximum", "overloads", "sigma")):
             w, h = numpy.array(data.shape) // 2
             quadrant_data = data[:h, :w]
-            mask = (quadrant_data > 0)
+            mask = (quadrant_data >= 0)
             stats_data = quadrant_data[mask] if mask.sum() > 0 else quadrant_data
 
             average = stats_data.mean()
@@ -342,7 +342,7 @@ class DataSet(ABC):
         self.frame = frame
         self.index = index
 
-    def get_sweeps(self) -> Sequence[Tuple[int, int]]:
+    def get_sweeps(self) -> list[tuple[int, int]]:
         """
         Compress an the frame series which is a sequence of ints into a sequence of tuple pairs representing
         contiguous ranges of values.
@@ -351,8 +351,8 @@ class DataSet(ABC):
          :return: Sequence[Tuple[int, int]]
          """
 
-        return tuple(
-            (sweep[0], sweep[-1])
+        return list(
+            (int(sweep[0]), int(sweep[-1]))
             for sweep in numpy.split(numpy.array(self.series), numpy.where(numpy.diff(self.series) > 1)[0] + 1)
             if len(sweep)
         )

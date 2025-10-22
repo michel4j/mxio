@@ -1,23 +1,15 @@
-[build-system]
-requires = ["setuptools>=42", "setuptools_scm[toml]>=6.0.1", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "mxio"
 description = "A Simple X-ray Area Detector Data IO Library"
 readme = "README.md"
 dynamic = ["version"]
-license = { text = "MIT" }
+license = "MIT"
 authors = [
     { name = "Michel Fodje", email = "michel4j@gmail.com" }
 ]
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
     "hdf5plugin",
@@ -33,13 +25,13 @@ dependencies = [
     "pyzmq",
     "setuptools-scm"
 ]
+requires-python = ">=3.9,<4.0"
+version = "0.0.0"
 
 [project.urls]
-homepage = "https://github.com/michel4j/mxio"
+Homepage = "https://github.com/michel4j/mxio"
+Issues = "https://github.com/michel4j/mxio/issues"
 
-[tool.setuptools_scm]
-version_scheme = "guess-next-dev"
-local_scheme = "node-and-date"
 
 [project.entry-points."mxio.plugins"]
 CBF = "mxio.formats.cbf"
@@ -49,3 +41,20 @@ RAXIS = "mxio.formats.raxis"
 SMV = "mxio.formats.smv"
 NEXUS = "mxio.formats.nexus"
 MAR345 = "mxio.formats.mar345"
+
+[tool.poetry]
+packages = [
+    { include = "mxio" },
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
+build-backend = "poetry_dynamic_versioning.backend"
+
+[tool.poetry.requires-plugins]
+poetry-dynamic-versioning = { version = ">=1.0.0,<2.0.0", extras = ["plugin"] }
+
+[tool.poetry-dynamic-versioning]
+enable = true
+vcs = "git"
+format = "{base}.{revision}{distance}"
