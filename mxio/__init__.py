@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Union, List, Optional, Tuple, TypedDict, ClassVar, BinaryIO, Sequence
+from collections.abc import Iterator
 import numpy
 from numpy.typing import NDArray, ArrayLike
 
@@ -266,7 +267,7 @@ class DataSet(ABC):
             self.set_frame(header, data, index)
             return self.frame
 
-    def frames(self) -> ImageFrame:
+    def frames(self) -> Iterator[ImageFrame]:
         """
         A generator which yields frames from the dataset, updates the index parameter of the dataset each iteration
         """
