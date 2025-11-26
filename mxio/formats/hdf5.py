@@ -133,9 +133,12 @@ class HDF5DataSet(DataSet):
         section_keys = list(self.file['/entry/data'].keys())
         self.data_sections = {}
         for section in section_keys:
-            attrs = self.file[f'/entry/data/{section}'].attrs
-            self.data_sections[section] = range(attrs['image_nr_low'], attrs['image_nr_high']+1)
-            frame_count += len(self.data_sections[section])
+            try:
+                attrs = self.file[f'/entry/data/{section}'].attrs
+                self.data_sections[section] = range(attrs['image_nr_low'], attrs['image_nr_high']+1)
+                frame_count += len(self.data_sections[section])
+            except KeyError:
+                print(f'Section {section} not found!')
 
         self.series = numpy.arange(frame_count) + 1
         self.size = frame_count
