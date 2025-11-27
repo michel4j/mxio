@@ -24,7 +24,8 @@ dependencies = [
     "lz4",
     "pyzmq",
     "setuptools-scm",
-    "poetry-dynamic-versioning (>=1.0.0)"
+    "poetry-dynamic-versioning (>=1.0.0)",
+    "pycbf (>=0.9.6.7,<0.10.0.0)",
 ]
 requires-python = ">=3.9,<4.0"
 

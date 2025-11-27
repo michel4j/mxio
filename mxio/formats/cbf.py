@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Tuple, Union, BinaryIO
 
 import numpy
+import pycbf
 from numpy.typing import ArrayLike
 
 from parsefire import parser
@@ -121,13 +122,7 @@ HEADER_SPECS = {
     }
 }
 
-
-def unit_vector(vector):
-    """ Returns the unit vector of the vector.  """
-    return vector / numpy.linalg.norm(vector)
-
-
-cbflib = ct.cdll.LoadLibrary('libcbf.so.0')
+cbflib = ct.cdll.LoadLibrary(pycbf._pycbf.__file__)
 libc = ct.cdll.LoadLibrary('libc.so.6')
 
 # LIBC Arg and return types
