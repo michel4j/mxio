@@ -1,19 +1,17 @@
-import sys
-import re
-from pathlib import Path
+import hashlib
+import os.path
 import os.path
 import re
 import sys
-from os import PathLike
-import hashlib
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field, asdict
-from pathlib import Path
-from typing import Union, List, Optional, Tuple, TypedDict, ClassVar, BinaryIO, Sequence
 from collections.abc import Iterator
+from dataclasses import dataclass, field, asdict
+from os import PathLike
+from pathlib import Path
+from typing import Union, Optional, Tuple, TypedDict, BinaryIO, Sequence, Any
+
 import numpy
 from numpy.typing import NDArray, ArrayLike
-
 
 if sys.version_info < (3, 10):
     from importlib_metadata import entry_points, version, PackageNotFoundError
@@ -38,6 +36,7 @@ __all__ = [
     'DataSet',
     'Geometry',
 ]
+
 
 class UnknownDataFormat(Exception):
     ...
@@ -119,7 +118,7 @@ class DataSetAttrs(TypedDict):
 class DataSet(ABC):
     name: str
     directory: Path
-    series: ArrayLike
+    series: Sequence
     identifier: str
     template: str
     reference: str
@@ -266,6 +265,7 @@ class DataSet(ABC):
             header, data = self.read_file(file_name)
             self.set_frame(header, data, index)
             return self.frame
+        return None
 
     def frames(self) -> Iterator[ImageFrame]:
         """
@@ -284,6 +284,7 @@ class DataSet(ABC):
         next_pos = numpy.searchsorted(self.series, self.index) + 1
         if next_pos < len(self.series):
             return self.get_frame(self.series[next_pos])
+        return None
 
     def prev_frame(self) -> Union[ImageFrame, None]:
         """
@@ -391,7 +392,7 @@ def read_image(path: str) -> Union[DataSet, None]:
     return dset
 
 
-def read_header(path) -> HeaderAttrs:
+def read_header(path) -> dict[str, Any]:
     """
     Determine the file type open the image using the correct image IO
     back-end, and return an image frame

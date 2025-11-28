@@ -1,7 +1,7 @@
 import os
 import re
 from pathlib import Path
-from typing import Tuple, Union, BinaryIO
+from typing import Tuple, Union, BinaryIO, Any
 
 import numpy
 from numpy.typing import NDArray
@@ -27,9 +27,10 @@ class SMVDataSet(DataSet):
         magic = b'{\nHEADER_BYTES='
         if file.read(len(magic)) == magic:
             return "SMV Area Detector Image",
+        return ()
 
     def read_file(self, filename: Union[str, Path]) -> Tuple[dict, NDArray]:
-        header = {'format': 'SMV'}
+        header: dict[str, Any] = {'format': 'SMV'}
         with open(filename, 'rb') as file:
             file.readline()
             header_line = file.readline().decode('utf-8')
