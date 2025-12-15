@@ -403,7 +403,7 @@ def read_header(path) -> dict[str, Any]:
     return asdict(dset.frame)
 
 
-def find_sweep(path: Path, name=r'[\w_-]+?') -> dict:
+def find_sweep(path: Path, name=r'.+?') -> dict:
     """
     Find the disk representation of a dataset from a single frame in a series
     :param path: full path to one image
