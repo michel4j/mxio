@@ -423,15 +423,16 @@ def find_sweep(path: Path, name=r'.+?') -> dict:
     matched = pattern.match(file_name)
     if matched:
         params = matched.groupdict()
+        name = params['name']
         width = len(params['field'])
         index = int(params['field'])
         template = '{name}{separator}{{field:>0{width}}}{extension}'.format(width=width, **params)
-        frame_pattern = re.compile(
-            r'^{name}{separator}(\d{{{width}}}){extension}$'.format(width=width, **params)
-        )
-        glob = '{name}{separator}{wildcard}{extension}'.format(width=width, wildcard='?' * width, **params)
-        name = params['name']
 
+        glob = '{name}{separator}{wildcard}{extension}'.format(width=width, wildcard='?' * width, **params)
+        params['pattern_name'] = re.escape(name)
+        frame_pattern = re.compile(
+            r'^{pattern_name}{separator}(\d{{{width}}}){extension}$'.format(width=width, **params)
+        )
         # unusual frame names without field separator
         if width > 6:
             names = [
