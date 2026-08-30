@@ -15,7 +15,6 @@ dependencies = [
     "hdf5plugin",
     "parsefire",
     "h5py",
-    "opencv-python",
     "python-magic",
     "pytz",
     "pyyaml",
@@ -23,8 +22,7 @@ dependencies = [
     "iso8601",
     "lz4",
     "pyzmq",
-    "setuptools-scm",
-    "poetry-dynamic-versioning (>=1.0.0)",
+    "tifffile",
     "pycbf (>=0.9.6.7,<0.10.0.0)",
 ]
 requires-python = ">=3.9,<4.0"

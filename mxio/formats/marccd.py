@@ -1,5 +1,5 @@
 import os
-import cv2
+import tifffile as tiff
 import math
 import struct
 import numpy
@@ -62,6 +62,6 @@ class MarCCDDataSet(DataSet):
         header['detector'] = f'Rayonix MX{det_mm:d}'
         header['format'] = 'TIFF'
 
-        data = cv2.imread(str(filename), -1)
+        data = tiff.imread(str(filename))
         return header, data
 
